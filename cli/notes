@@ -1,4 +1,0 @@
-using SID predicates for IOS-style CLI parsing
-lexer produces tokens for "word", and for various control characters (^C, '?', etc)
-parser uses predicates to hop to apt. parts of the grammar, and output help etc
-
