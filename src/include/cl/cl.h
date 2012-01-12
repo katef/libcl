@@ -38,8 +38,8 @@ void cl_close(struct cl_peer *p);
 
 const char* cl_get_field(cl_peer *p, int id);
 
-void cl_printf(struct cl_peer *p, const char *fmt, ...);
-void cl_vprintf(struct cl_peer *p, const char *fmt, va_list ap);
+int cl_printf(struct cl_peer *p, const char *fmt, ...);
+int cl_vprintf(struct cl_peer *p, const char *fmt, va_list ap);
 
 ssize_t cl_read(struct cl_peer *p, size_t len, const void *data);
 void cl_set_mode(struct cl_peer *p, int mode);
