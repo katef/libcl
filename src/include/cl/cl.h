@@ -43,6 +43,7 @@ void cl_vprintf(struct cl_peer *p, const char *fmt, va_list ap);
 
 ssize_t cl_read(struct cl_peer *p, size_t len, const void *data);
 void cl_set_mode(struct cl_peer *p, int mode);
+void cl_again(struct cl_peer *p);
 
 #endif
 
