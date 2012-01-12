@@ -30,7 +30,7 @@ struct cl_command {
 };
 
 struct cl_tree * cl_create(size_t command_count, struct cl_command commands[],
-	size_t field_count, struct cl_field fields[]);
+	size_t field_count, struct cl_field fields[], int (*print_prompt)(struct cl_peer *p, int mode));
 void cl_destroy(struct cl_tree *t);
 
 struct cl_peer * cl_accept(struct cl_tree *t);
@@ -44,6 +44,9 @@ int cl_vprintf(struct cl_peer *p, const char *fmt, va_list ap);
 ssize_t cl_read(struct cl_peer *p, size_t len, const void *data);
 void cl_set_mode(struct cl_peer *p, int mode);
 void cl_again(struct cl_peer *p);
+void cl_help(struct cl_peer *p, int mode);
+
+int cl_print_prompt(struct cl_peer *p, int mode);
 
 #endif
 
