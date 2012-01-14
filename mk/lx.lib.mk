@@ -1,11 +1,5 @@
 # $Id$
 
-.if !defined(PARTS)
-.BEGIN::
-	@${ECHO} '$${PARTS} must be set' >&2
-	@${EXIT} 1
-.endif
-
 .if !defined(LIB)
 .BEGIN::
 	@${ECHO} '$${LIB} must be set' >&2
@@ -26,10 +20,6 @@ LIBEXT_DYNAMIC?= so
 LIBEXT_STATIC?=  a
 .endif
 
-.for part in ${PARTS}
-${OBJ_SDIR}/${LIB}.o: ${OBJ_DIR}/${part}/_partial.o
-.endfor
-
 .for obj in ${OBJS}
 ${OBJ_SDIR}/${LIB}.o: ${OBJ_SDIR}/${obj}
 .endfor
@@ -38,7 +28,7 @@ ${OBJ_SDIR}/${LIB}.o.syms: ${OBJ_SDIR}/${LIB}.o.all
 
 ${OBJ_SDIR}/${LIB}.o:
 	${LD} -r -o ${.TARGET}.all ${.ALLSRC}
-	${NM} -gj ${.TARGET}.all | ${EGREP} "^_?${LIB_NS}" > ${.TARGET}.syms
+#	${NM} -gj ${.TARGET}.all | ${EGREP} "^_?${LIB_NS}" > ${.TARGET}.syms
 .if ${UNAME_S} == "Darwin"
 	${LD} -r -o ${.TARGET} -x -exported_symbols_list ${.TARGET}.syms ${.TARGET}.all
 .else

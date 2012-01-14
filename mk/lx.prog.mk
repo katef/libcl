@@ -1,8 +1,8 @@
 # $Id$
 
-.if !defined(PARTS) && !defined(OBJS)
+.if !defined(OBJS)
 .BEGIN::
-	@${ECHO} '$${PARTS} or $${OBJS} must be set' >&2
+	@${ECHO} '$${OBJS} must be set' >&2
 	@${EXIT} 1
 .endif
 
@@ -11,10 +11,6 @@
 	@${ECHO} '$${PROG} must be set' >&2
 	@${EXIT} 1
 .endif
-
-.for part in ${PARTS}
-${OBJ_SDIR}/${PROG}: ${OBJ_DIR}/${part}/_partial.o
-.endfor
 
 .for obj in ${OBJS}
 ${OBJ_SDIR}/${PROG}: ${OBJ_SDIR}/${obj}
