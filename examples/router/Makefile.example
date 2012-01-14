@@ -1,0 +1,10 @@
+# $Id$
+
+# TODO: this makefile is portable, and gets installed to share/examples as "Makefile"
+
+router: router.o
+	${CC} ${LDFLAGS} -o router router.o -lcl
+
+router.o: router.c
+	${CC} ${CFLAGS} -c router.c
+
