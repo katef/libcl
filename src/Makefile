@@ -3,7 +3,18 @@
 .include "Makefile.inc"
 
 
-SUBDIR+= libcl
+CFLAGS+= -I ${BASE_DIR}/include
 
-.include <lx.subdir.mk>
+SRCS+= cl.c
+SRCS+= cl_read.c
+SRCS+= trie.c
+SRCS+= field.c
+
+.include <lx.obj.mk>
+
+
+LIB= libcl
+LIB_NS= cl_
+
+.include <lx.lib.mk>
 
