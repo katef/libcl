@@ -22,7 +22,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-#include <cl/cl.h>
+#include <cl/tree.h>
 
 #include <assert.h>
 #include <unistd.h>
@@ -50,6 +50,13 @@ enum {
 enum {
 	FIELD_USERNAME = 1 << 0,
 	FIELD_PASSWORD = 1 << 1
+};
+
+struct peer {
+	int fd;
+	struct cl_peer *peer;
+
+	struct peer *next;
 };
 
 static int
@@ -300,6 +307,7 @@ printprompt(struct cl_peer *peer, int mode)
 /* TODO: assert(single bit in mode); */
 
 	switch (mode) {
+	case MODE_CONNECTED: return cl_printf(peer, ">");	/* XXX: not for pre-motd. make a MODE_MOTD? */
 	case MODE_DISABLED:  return cl_printf(peer, ">");
 	case MODE_ENABLED:   return cl_printf(peer, "#");
 	case MODE_CONFIGURE: return cl_printf(peer, "config#");
@@ -346,15 +354,39 @@ const struct cl_command commands[] = {
 };
 
 static void
-addpeer(int fd, struct cl_peer *peer)
+addpeer(struct peer **peers, int fd, struct cl_peer *peer)
 {
-	/* TODO */
+	struct peer *new;
+
+	assert(fd != -1);
+	assert(peer != NULL);
+	assert(peers != NULL);
+
+	new = malloc(sizeof *new);
+	if (new == NULL) {
+		perror("malloc");
+		return;
+	}
+
+	new->fd   = fd;
+	new->peer = peer;
+
+	new->next = *peers;
+	*peers = new;
 }
 
 static struct cl_peer *
-findpeer(int fd)
+findpeer(struct peer *peers, int fd)
 {
-	/* TODO */
+	struct peer *p;
+
+	assert(fd != -1);
+
+	for (p = peers; p != NULL; p = p->next) {
+		if (p->fd == fd) {
+			return p->peer;
+		}
+	}
 
 	return NULL;
 }
@@ -369,7 +401,7 @@ main(int argc, char **argv)
 	struct cl_tree *tree;
 
 	tree = cl_create(sizeof tree, commands, sizeof fields, fields,
-		printprompt);
+		printprompt, cl_visible);
 	if (tree == NULL) {
 		perror("cl_create");
 		return 1;
@@ -401,7 +433,7 @@ main(int argc, char **argv)
 
 	/* Address */
 	{
-		a = inet_addr(argv[0]);
+		a = inet_addr(argv[1]);
 		if (INADDR_NONE == a) {
 			fprintf(stderr, "malformed address\n");
 			return 1;
@@ -447,6 +479,9 @@ main(int argc, char **argv)
 	{
 		fd_set master;
 		int maxfd;
+		struct peer *peers;
+
+		peers = NULL;
 
 		FD_ZERO(&master);
 		FD_SET(s, &master);
@@ -478,13 +513,19 @@ main(int argc, char **argv)
 
 				/* XXX: store peer where? linked list caller-sider? */
 				peer = cl_accept(tree);
-				addpeer(i, peer);
+				if (peer == NULL) {
+					perror ("cl_accept");
+					return 1;
+				}
 
-				/* XXX: loop until everything is read? no, by contract a single
-				 * command will be consumed per cl_read() call */
-				cl_read(peer, "show motd\n", 10);
+				addpeer(&peers, i, peer);
 
 				cl_set_mode(peer, MODE_CONNECTED);
+
+				/* XXX: loop until everything is read? no, by contract a single
+				 * command will be consumed per cl_read() call. no, can't do that;
+				 * we might not *have* a full command. So this is pot luck... */
+				cl_read(peer, "show motd\n", 10);
 			}
 
 			for (i = 0; i <= maxfd; ++i) {
@@ -510,11 +551,12 @@ main(int argc, char **argv)
 					continue;
 				}
 
-				peer = findpeer(i);
+				peer = findpeer(peers, i);
 
 				assert(peer != NULL);
 
 				if (!cl_read(peer, buf, (size_t) n)) {
+					/* TODO: remove peer from peers ll */
 					FD_CLR(i, &master);
 					close(i);
 					continue;
