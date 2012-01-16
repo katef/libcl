@@ -5,6 +5,7 @@
 
 #include <limits.h>
 #include <stddef.h>
+#include <stdarg.h>
 
 enum readstate {
 	STATE_NEW, STATE_CHAR, STATE_FIELD
@@ -23,6 +24,7 @@ struct cl_tree {
 
 	int (*printprompt)(struct cl_peer *p, int mode);
 	int (*visible)(struct cl_peer *p, int mode, const struct cl_command *command);
+	int (*vprintf)(struct cl_peer *p, const char *fmt, va_list ap);
 };
 
 struct trie {
@@ -39,6 +41,8 @@ struct cl_peer {
 	enum readstate state;
 	struct trie *t;
 	int fields;
+
+	void *opaque;
 };
 
 struct trie *

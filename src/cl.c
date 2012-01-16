@@ -16,7 +16,8 @@ struct cl_tree *
 cl_create(size_t command_count, const struct cl_command commands[],
 	size_t field_count, const struct cl_field fields[],
 	int (*printprompt)(struct cl_peer *p, int mode),
-	int (*visible)(struct cl_peer *p, int mode, const struct cl_command *command))
+	int (*visible)(struct cl_peer *p, int mode, const struct cl_command *command),
+	int (*vprintf)(struct cl_peer *p, const char *fmt, va_list ap))
 {
 	size_t i;
 	struct cl_tree *new;
@@ -33,6 +34,7 @@ cl_create(size_t command_count, const struct cl_command commands[],
 	new->root          = NULL;
 	new->printprompt   = printprompt;
 	new->visible       = visible;
+	new->vprintf       = vprintf;
 
 	new->commands      = commands;
 	new->command_count = command_count;
@@ -76,9 +78,10 @@ cl_accept(struct cl_tree *t)
 		return NULL;
 	}
 
-	new->tree  = t;
-	new->mode  = 0;
-	new->state = STATE_NEW;
+	new->tree   = t;
+	new->mode   = 0;
+	new->state  = STATE_NEW;
+	new->opaque = NULL;
 
 	return new;
 }
@@ -86,6 +89,22 @@ cl_accept(struct cl_tree *t)
 void
 cl_close(struct cl_peer *p)
 {
+}
+
+void
+cl_set_opaque(struct cl_peer *p, void *opaque)
+{
+	assert(p != NULL);
+
+	p->opaque = opaque;
+}
+
+void *
+cl_get_opaque(struct cl_peer *p)
+{
+	assert(p != NULL);
+
+	return p->opaque;
 }
 
 const char *
@@ -98,22 +117,29 @@ int
 cl_printf(struct cl_peer *p, const char *fmt, ...)
 {
 	va_list ap;
+	int n;
 
 	assert(p != NULL);
+	assert(p->tree != NULL);
+	assert(p->tree->vprintf != NULL);
+	assert(fmt != NULL);
 
 	va_start(ap, fmt);
-	vfprintf(stdout, fmt, ap);	/* TODO: to peer, not stdout */
+	n = cl_vprintf(p, fmt, ap);
 	va_end(ap);
 
-	fprintf(stdout, "\n");
-
-	return -1;
+	return n;
 }
 
 int
 cl_vprintf(struct cl_peer *p, const char *fmt, va_list ap)
 {
-	return -1;
+	assert(p != NULL);
+	assert(p->tree != NULL);
+	assert(p->tree->vprintf != NULL);
+	assert(fmt != NULL);
+
+	return p->tree->vprintf(p, fmt, ap);
 }
 
 void

@@ -29,6 +29,12 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
+
+/* XXX: va_copy is C99; this workaround is not portable */
+#ifndef va_copy
+# define va_copy(dst, src) ((dst) = (src))
+#endif
 
 #define MOTD "This is an example command server for libcl. Type help for help."
 
@@ -58,6 +64,46 @@ struct peer {
 
 	struct peer *next;
 };
+
+static struct peer *
+addpeer(struct peer **peers, int fd, struct cl_peer *peer)
+{
+	struct peer *new;
+
+	assert(fd != -1);
+	assert(peer != NULL);
+	assert(peers != NULL);
+
+	new = malloc(sizeof *new);
+	if (new == NULL) {
+		perror("malloc");
+		return NULL;
+	}
+
+	new->fd   = fd;
+	new->peer = peer;
+
+	new->next = *peers;
+	*peers = new;
+
+	return new;
+}
+
+static struct cl_peer *
+findpeer(struct peer *peers, int fd)
+{
+	struct peer *p;
+
+	assert(fd != -1);
+
+	for (p = peers; p != NULL; p = p->next) {
+		if (p->fd == fd) {
+			return p->peer;
+		}
+	}
+
+	return NULL;
+}
 
 static int
 validate_name(struct cl_peer *peer, int id, const char *value)
@@ -103,7 +149,7 @@ cmd_motd(struct cl_peer *peer, const char *cmd, int mode, int argc, char *argv[]
 		return;
 	}
 
-	cl_printf(peer, MOTD);
+	cl_printf(peer, "%s\n", MOTD);
 }
 
 static void
@@ -307,13 +353,13 @@ printprompt(struct cl_peer *peer, int mode)
 /* TODO: assert(single bit in mode); */
 
 	switch (mode) {
-	case MODE_CONNECTED: return cl_printf(peer, ">");	/* XXX: not for pre-motd. make a MODE_MOTD? */
-	case MODE_DISABLED:  return cl_printf(peer, ">");
-	case MODE_ENABLED:   return cl_printf(peer, "#");
-	case MODE_CONFIGURE: return cl_printf(peer, "config#");
-	case MODE_INTERFACE: return cl_printf(peer, "config(%s)#", something);
-	case MODE_LINK:      return cl_printf(peer, "config(%s)#", something);
-	case MODE_EFFECT:    return cl_printf(peer, "config(%s)#", something);
+	case MODE_CONNECTED: return cl_printf(peer, "> ");	/* XXX: not for pre-motd. make a MODE_MOTD? */
+	case MODE_DISABLED:  return cl_printf(peer, "> ");
+	case MODE_ENABLED:   return cl_printf(peer, "# ");
+	case MODE_CONFIGURE: return cl_printf(peer, "config# ");
+	case MODE_INTERFACE: return cl_printf(peer, "config(%s)# ", something);
+	case MODE_LINK:      return cl_printf(peer, "config(%s)# ", something);
+	case MODE_EFFECT:    return cl_printf(peer, "config(%s)# ", something);
 	}
 
 	/* UNREACHED */
@@ -353,42 +399,48 @@ const struct cl_command commands[] = {
 	{ "exit",  MODE_DISABLED, 0, cmd_exit, "disconnect"                  }
 };
 
-static void
-addpeer(struct peer **peers, int fd, struct cl_peer *peer)
+static int
+vpeerprintf(struct cl_peer *p, const char *fmt, va_list ap)
 {
-	struct peer *new;
+	struct peer *peer;
+	va_list ap1;
+	char *buf;
+	int n;
 
-	assert(fd != -1);
+	assert(p != NULL);
+	assert(fmt != NULL);
+
+	peer = cl_get_opaque(p);
+
 	assert(peer != NULL);
-	assert(peers != NULL);
+	assert(peer->fd != -1);
 
-	new = malloc(sizeof *new);
-	if (new == NULL) {
-		perror("malloc");
-		return;
+	/* XXX: va_copy is C99 */
+	va_copy(ap1, ap);
+
+	/* XXX: vsnprintf is C99 */
+	n = vsnprintf(NULL, 0, fmt, ap);
+
+	assert(n != -1);
+
+	if (n == 0) {
+		return 0;
 	}
 
-	new->fd   = fd;
-	new->peer = peer;
-
-	new->next = *peers;
-	*peers = new;
-}
-
-static struct cl_peer *
-findpeer(struct peer *peers, int fd)
-{
-	struct peer *p;
-
-	assert(fd != -1);
-
-	for (p = peers; p != NULL; p = p->next) {
-		if (p->fd == fd) {
-			return p->peer;
-		}
+	buf = malloc(n + 1);
+	if (buf == NULL) {
+		return -1;
 	}
 
-	return NULL;
+	vsnprintf(buf, n + 1, fmt, ap1);
+	va_end(ap1);
+
+	/* XXX: ssize_t -> int */
+	n = write(peer->fd, buf, n);
+
+	free(buf);
+
+	return n;
 }
 
 int
@@ -401,7 +453,7 @@ main(int argc, char **argv)
 	struct cl_tree *tree;
 
 	tree = cl_create(sizeof tree, commands, sizeof fields, fields,
-		printprompt, cl_visible);
+		printprompt, cl_visible, vpeerprintf);
 	if (tree == NULL) {
 		perror("cl_create");
 		return 1;
@@ -481,12 +533,11 @@ main(int argc, char **argv)
 		int maxfd;
 		struct peer *peers;
 
-		peers = NULL;
-
 		FD_ZERO(&master);
 		FD_SET(s, &master);
 
 		maxfd = s;
+		peers = NULL;
 
 		for (;;) {
 			int i;
@@ -501,6 +552,7 @@ main(int argc, char **argv)
 
 			if (FD_ISSET(s, &curr)) {
 				struct cl_peer *peer;
+				struct peer *new;
 
 				i = accept(s, NULL, 0);
 				if (-1 == i) {
@@ -518,8 +570,13 @@ main(int argc, char **argv)
 					return 1;
 				}
 
-				addpeer(&peers, i, peer);
+				new = addpeer(&peers, i, peer);
+				if (new == NULL) {
+					perror ("addpeer");
+					return 1;
+				}
 
+				cl_set_opaque(peer, new);
 				cl_set_mode(peer, MODE_CONNECTED);
 
 				/* XXX: loop until everything is read? no, by contract a single
