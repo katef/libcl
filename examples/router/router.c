@@ -186,6 +186,8 @@ cmd_login(struct cl_peer *peer, const char *cmd, int mode, int argc, char *argv[
 		return;
 	}
 
+	printf("invalid login for %s\n", user);
+
 	if (attempts > 3) {
 		cl_printf(peer, "invalid password");
 		attempts = 0;
@@ -319,7 +321,8 @@ cmd_exit(struct cl_peer *peer, const char *cmd, int mode, int argc, char *argv[]
 	case MODE_LINK:      cl_set_mode(peer, MODE_CONFIGURE); break;
 	case MODE_CONFIGURE: cl_set_mode(peer, MODE_ENABLED);   break;
 	case MODE_ENABLED:   cl_set_mode(peer, MODE_DISABLED);  break;
-	case MODE_DISABLED:  cl_close(peer);                    break;
+	case MODE_DISABLED:  cl_set_mode(peer, MODE_CONNECTED); break;
+	case MODE_CONNECTED: cl_close(peer);                    break;
 	}
 }
 
@@ -372,7 +375,7 @@ const struct cl_field fields[] = {
 };
 
 const struct cl_command commands[] = {
-	{ "show motd",          MODE_CONNECTED, 0,                               cmd_motd,  NULL },
+	{ "show motd",          MODE_CONNECTED, 0,                               cmd_motd,  "message of the day" },
 	{ "login",              MODE_CONNECTED, FIELD_USERNAME | FIELD_PASSWORD, cmd_login, NULL },
 
 	{ "enable",             MODE_DISABLED,  FIELD_PASSWORD, cmd_enable, "usage" },
@@ -389,14 +392,15 @@ const struct cl_command commands[] = {
 	{ "set level",                           MODE_EFFECT,             0, cmd_setlevel, "usage" },
 */
 
-	{ "help", ~0U, 0, cmd_help, "usage" },
-
 	/*
 	 * The "exit" command would be under ~0U for all modes, but I wanted to show
-	 * how to provide different usage text for one specific mode.
+	 * how to provide different usage text for particular modes.
 	 */
-	{ "exit", ~MODE_DISABLED, 0, cmd_exit, "return to the previous mode" },
-	{ "exit",  MODE_DISABLED, 0, cmd_exit, "disconnect"                  }
+	{ "exit", ~MODE_DISABLED & ~MODE_CONNECTED, 0, cmd_exit, "return to the previous mode" },
+	{ "exit",  MODE_DISABLED,                   0, cmd_exit, "logout"                      },
+	{ "exit",  MODE_CONNECTED,                  0, cmd_exit, "disconnect"                  },
+
+	{ "help", ~0U, 0, cmd_help, NULL }
 };
 
 static int
@@ -452,7 +456,8 @@ main(int argc, char **argv)
 	struct sockaddr_in sin;
 	struct cl_tree *tree;
 
-	tree = cl_create(sizeof tree, commands, sizeof fields, fields,
+	tree = cl_create(sizeof commands / sizeof *commands, commands,
+		sizeof fields / sizeof *fields, fields,
 		printprompt, cl_visible, vpeerprintf);
 	if (tree == NULL) {
 		perror("cl_create");
