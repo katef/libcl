@@ -6,9 +6,11 @@
 CFLAGS+= -I ${BASE_DIR}/include
 
 SRCS+= cl.c
-SRCS+= cl_read.c
 SRCS+= trie.c
 SRCS+= field.c
+
+SRCS+= read.c
+SRCS+= plain.c
 
 .include <lx.obj.mk>
 

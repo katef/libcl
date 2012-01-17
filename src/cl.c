@@ -8,6 +8,7 @@
 #include <stddef.h>
 #include <stdarg.h>
 #include <stdlib.h>
+#include <errno.h>
 
 #include "internal.h"
 
@@ -66,7 +67,7 @@ cl_destroy(struct cl_tree *t)
 }
 
 struct cl_peer *
-cl_accept(struct cl_tree *t)
+cl_accept(struct cl_tree *t, enum cl_io io)
 {
 	struct cl_peer *new;
 
@@ -78,6 +79,7 @@ cl_accept(struct cl_tree *t)
 	}
 
 	new->tree   = t;
+	new->io     = io;
 	new->mode   = 0;
 	new->state  = STATE_NEW;
 	new->opaque = NULL;
@@ -149,6 +151,39 @@ cl_vprintf(struct cl_peer *p, const char *fmt, va_list ap)
 	return p->tree->vprintf(p, fmt, ap);
 }
 
+ssize_t
+cl_read(struct cl_peer *p, const void *data, size_t len)
+{
+	ssize_t (*getc)(struct cl_peer *p, char c);
+	size_t i;
+
+	assert(p != NULL);
+	assert(p->tree != NULL);
+	assert(data != NULL);
+	assert(len <= SSIZE_MAX);
+
+	switch (p->io) {
+	case CL_PLAIN:  getc = getc_plain;  break;
+	case CL_TELNET: getc = getc_plain;  break;
+/* TODO:
+	case CL_TELNET: getc = getc_telnet; break;
+	case CL_ECMA48: getc = getc_ecma48; break;
+*/
+
+	default:
+		errno = EINVAL;
+		return -1;
+	}
+
+	for (i = 0; i < len; i++) {
+		if (-1 == getc(p, * ((char *) data + i))) {
+			return -1;
+		}
+	}
+
+	return i;
+}
+
 void
 cl_set_mode(struct cl_peer *p, int mode)
 {
@@ -181,5 +216,21 @@ cl_help(struct cl_peer *p, int mode)
 			cl_printf(p, "  %-20s - %s\n", p->tree->commands[i].command, p->tree->commands[i].usage);
 		}
 	}
+}
+
+/* You don't have to use this; if you provide your own then your modes needn't
+ * be a bitmap. You could always return true, or perhaps have some
+ * application-specific special cases.
+ */
+int
+cl_visible(struct cl_peer *p, int mode, int modes)
+{
+	assert(p != NULL);
+
+	if (mode == 0) {
+		return modes == 0;
+	}
+
+	return modes & mode;
 }
 

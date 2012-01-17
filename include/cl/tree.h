@@ -8,6 +8,12 @@
 #include <stddef.h>
 #include <stdarg.h>
 
+enum cl_io {
+	CL_PLAIN,
+	CL_ECMA48,
+	CL_TELNET
+};
+
 struct cl_peer;
 struct cl_tree;
 
@@ -37,7 +43,7 @@ struct cl_tree *cl_create(size_t command_count, const struct cl_command commands
 	int (*vprintf)(struct cl_peer *p, const char *fmt, va_list ap));
 void cl_destroy(struct cl_tree *t);
 
-struct cl_peer *cl_accept(struct cl_tree *t);
+struct cl_peer *cl_accept(struct cl_tree *t, enum cl_io);
 void cl_close(struct cl_peer *p);
 
 void cl_set_opaque(struct cl_peer *p, void *opaque);

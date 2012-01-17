@@ -568,8 +568,7 @@ main(int argc, char **argv)
 				FD_SET(i, &master);
 				maxfd = MAX(maxfd, i);
 
-				/* XXX: store peer where? linked list caller-sider? */
-				peer = cl_accept(tree);
+				peer = cl_accept(tree, CL_TELNET);
 				if (peer == NULL) {
 					perror ("cl_accept");
 					return 1;

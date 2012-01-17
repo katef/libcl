@@ -51,6 +51,7 @@ struct value {
 
 struct cl_peer {
 	struct cl_tree *tree;
+	enum cl_io io;
 	int mode;
 
 	/* XXX: private to cl_read.c */
@@ -68,6 +69,11 @@ trie_add(struct trie **trie, const char *s, const struct cl_command *command);
 
 const struct cl_field *
 find_field(struct cl_tree *t, int id);
+
+int getc_main  (struct cl_peer *p, char c);
+int getc_plain (struct cl_peer *p, char c);
+int getc_telnet(struct cl_peer *p, char c);
+int getc_ecma48(struct cl_peer *p, char c);
 
 #endif
 
