@@ -6,7 +6,7 @@
 
 #include <assert.h>
 #include <stddef.h>
-#include <stdio.h>	/* XXX */
+#include <stdlib.h>
 
 #include "internal.h"
 
@@ -15,16 +15,15 @@
  * application-specific special cases.
  */
 int
-cl_visible(struct cl_peer *p, int mode, const struct cl_command *command)
+cl_visible(struct cl_peer *p, int mode, int modes)
 {
 	assert(p != NULL);
-	assert(command != NULL);
 
 	if (mode == 0) {
-		return p->t->command->modes == 0;
+		return modes == 0;
 	}
 
-	return p->t->command->modes & p->mode;
+	return modes & mode;
 }
 
 static void
@@ -40,7 +39,7 @@ fieldprompt(struct cl_peer *p)
 
 	assert(f != NULL);
 
-	printf("field %s: \n", f->name);
+	cl_printf(p, "%s: ", f->name);
 }
 
 ssize_t
@@ -53,12 +52,10 @@ cl_read(struct cl_peer *p, const void *data, size_t len)
 	assert(p->tree->root != NULL);
 	assert(data != NULL);
 
-	if (len == 0) {
-		return 0;
-	}
-
 	/* TODO: keep p->t and the p->state enum private to this function somehow.
 	maybe a readstate struct */
+
+	/* XXX: when len == SIZE_MAX */
 
 	for (s = data; s - (const char *) data < len; s++) {
 		/* TODO: FSM; CSI lexing & telnet */
@@ -72,6 +69,7 @@ cl_read(struct cl_peer *p, const void *data, size_t len)
 			p->t      = p->tree->root;
 			p->state  = STATE_CHAR;
 			p->fields = 0;
+			p->values = NULL;
 
 			p->tree->printprompt(p, p->mode);
 
@@ -87,31 +85,31 @@ cl_read(struct cl_peer *p, const void *data, size_t len)
 			switch (*s) {
 			case '\n':
 				if (p->t->command == NULL) {
-					printf("command not found\n");
+					cl_printf(p, "command not found\n");
 
 					p->state = STATE_NEW;
 					continue;
 				}
 
-				if (!p->tree->visible(p, p->mode, p->t->command)) {
-					printf("command not found for this mode\n");
+				if (!p->tree->visible(p, p->mode, p->t->command->modes)) {
+					cl_printf(p, "command not found\n");
 
 					p->state = STATE_NEW;
 					continue;
 				}
 
-				printf("command acquired: %s\n", p->t->command->command);
+				/* TODO: store argv, argc here */
 
 				p->fields = p->t->command->fields;
 
 				p->state = STATE_FIELD;
 
-				goto nextfield;
+				goto firstfield;
 
 			default:
 				p->t = p->t->edge[(unsigned char) *s];
 				if (p->t == NULL) {
-					printf("command not found for '%c'\n", *s);
+					cl_printf(p, "command not found\n");
 					return s - (const char *) data;
 				}
 
@@ -125,27 +123,60 @@ cl_read(struct cl_peer *p, const void *data, size_t len)
 		case STATE_FIELD:
 			switch (*s) {
 			case '\n':
-				/* TODO: store argv, argc here */
+				p->values->value[p->count] = '\0';
 
 				p->fields &= p->fields - 1;
 
-nextfield:
+firstfield:
 
 				if (p->fields == 0) {
-					printf("executing callback\n");
-
 					p->t->command->callback(p, p->t->command->command, p->mode, 0, NULL);
+
+					/* TODO: free .values list */
 
 					p->state = STATE_NEW;
 					continue;
 				}
 
+				{
+					struct value *new;
+
+					new = malloc(sizeof *new + 1);
+					if (new == NULL) {
+						/* TODO: free .values list */
+						return -1;
+					}
+
+					new->id    = p->fields & ~(p->fields - 1);
+					new->value = (char *) new + sizeof *new;
+					new->next  = p->values;
+
+					p->values = new;
+					p->count  = 0;
+				}
+
 				fieldprompt(p);
+
+				/* TODO: turn off echo if appropriate */
 
 				continue;
 
 			default:
-				/* TODO: push character somewhere for field ID p->fields & ~(p->fields - 1) */
+				if (p->count % 32 == 0) {
+					struct value *tmp;
+
+					tmp = realloc(p->values, sizeof *p->values + p->count + 32);
+					if (tmp == NULL) {
+						/* TODO: free .values list */
+						return -1;
+					}
+
+					tmp->value = (char *) tmp + sizeof *tmp;
+
+					p->values = tmp;
+				}
+
+				p->values->value[p->count++] = *s;
 
 				continue;
 			}

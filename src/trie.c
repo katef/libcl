@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <cl/tree.h>
+
 #include "internal.h"
 
 struct trie *
@@ -23,15 +25,38 @@ trie_add(struct trie **trie, const char *s, const struct cl_command *command)
 			return NULL;	
 		}
 
+		(*trie)->command = NULL;
+
 		for (i = 0; i < sizeof (*trie)->edge / sizeof *(*trie)->edge; i++) {
 			(*trie)->edge[i] = NULL;
 		}
 	}
 
 	if (*s == '\0') {
-		assert((*trie)->command == NULL);
+		/*
+		 * A command may be already populated within the trie in the case of
+		 * different usages given for the same path. If so, these are required
+		 * to have the same callback and fields, and modes which do not overlap
+		 * so that we may intersect our incoming command with what is present.
+		 */
+		if ((*trie)->command == NULL) {
+			(*trie)->command = malloc(sizeof *(*trie)->command);
+			if ((*trie)->command == NULL) {
+				return NULL;
+			}
 
-		(*trie)->command = command;
+			(*trie)->command->command  = command->command;
+			(*trie)->command->modes    = 0;
+			(*trie)->command->fields   = command->fields;
+			(*trie)->command->callback = command->callback;
+		}
+
+		assert(0 == strcmp((*trie)->command->command, command->command)); /* by definition */
+		assert(0 == ((*trie)->command->modes & command->modes));
+		assert((*trie)->command->callback == command->callback);
+		assert((*trie)->command->fields   == command->fields);
+
+		(*trie)->command->modes |= command->modes;
 
 		return *trie;
 	}
