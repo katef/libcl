@@ -43,18 +43,13 @@ cl_create(size_t command_count, const struct cl_command commands[],
 
 	for (i = 0; i < command_count; i++) {
 		struct trie *node;
-		size_t j;
 
 		/* things to assert about .command: does not start with space; all alnum or ' '; all isprint;
-		 * no non-' ' whitespace */
+		 * no non-' ' whitespace; is not empty */
 		node = trie_add(&new->root, commands[i].command, &commands[i]);
 		if (node == NULL) {
 			cl_destroy(new);
 			return NULL;
-		}
-
-		for (j = 0; j < field_count; j++) {
-			/* TODO: do we need to store these in any other form? probably not... */
 		}
 	}
 
@@ -67,7 +62,7 @@ cl_destroy(struct cl_tree *t)
 }
 
 struct cl_peer *
-cl_accept(struct cl_tree *t, enum cl_io io)
+cl_accept(struct cl_tree *t, int fd, enum cl_io io)
 {
 	struct cl_peer *new;
 
@@ -78,11 +73,46 @@ cl_accept(struct cl_tree *t, enum cl_io io)
 		return NULL;
 	}
 
+	new->rctx = read_create();
+	if (new->rctx == NULL) {
+		free(new);
+		return NULL;
+	}
+
 	new->tree   = t;
-	new->io     = io;
 	new->mode   = 0;
-	new->state  = STATE_NEW;
 	new->opaque = NULL;
+
+	switch (io) {
+	case CL_PLAIN:  new->io = io_plain;  break;
+	case CL_TELNET: new->io = io_telnet; break;
+	case CL_ECMA48: new->io = io_ecma48; break;
+
+	default:
+		read_destroy(new->rctx);
+		free(new);
+
+		errno = EINVAL;
+		return NULL;
+	}
+
+	if (new->io.create != NULL) {
+		new->ioctx = new->io.create(fd);
+		if (new->ioctx == NULL) {
+			read_destroy(new->rctx);
+			free(new);
+			return NULL;
+		}
+	}
+
+	if (-1 == new->tree->printprompt(new, new->mode)) {
+		if (new->io.destroy != NULL) {
+			new->io.destroy(new->ioctx);
+		}
+		read_destroy(new->rctx);
+		free(new);
+		return NULL;
+	}
 
 	return new;
 }
@@ -111,15 +141,9 @@ cl_get_opaque(struct cl_peer *p)
 const char *
 cl_get_field(struct cl_peer *p, int id)
 {
-	const struct value *v;
+	assert(p != NULL);
 
-	for (v = p->values; v != NULL; v = v->next) {
-		if (v->id == id) {
-			return v->value;
-		}
-	}
-
-	return NULL;
+	return read_get_field(p->rctx, id);
 }
 
 int
@@ -154,34 +178,13 @@ cl_vprintf(struct cl_peer *p, const char *fmt, va_list ap)
 ssize_t
 cl_read(struct cl_peer *p, const void *data, size_t len)
 {
-	ssize_t (*getc)(struct cl_peer *p, char c);
-	size_t i;
-
 	assert(p != NULL);
 	assert(p->tree != NULL);
+	assert(p->ioctx != NULL);
 	assert(data != NULL);
 	assert(len <= SSIZE_MAX);
 
-	switch (p->io) {
-	case CL_PLAIN:  getc = getc_plain;  break;
-	case CL_TELNET: getc = getc_plain;  break;
-/* TODO:
-	case CL_TELNET: getc = getc_telnet; break;
-	case CL_ECMA48: getc = getc_ecma48; break;
-*/
-
-	default:
-		errno = EINVAL;
-		return -1;
-	}
-
-	for (i = 0; i < len; i++) {
-		if (-1 == getc(p, * ((char *) data + i))) {
-			return -1;
-		}
-	}
-
-	return i;
+	return p->io.read(p, p->ioctx, data, len);
 }
 
 void

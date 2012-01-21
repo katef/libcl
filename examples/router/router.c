@@ -17,6 +17,7 @@
 # define HAVE_SALEN
 #endif
 
+#include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/select.h>
 #include <netinet/in.h>
@@ -30,6 +31,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <stdint.h>	/* XXX: C99, for SIZE_MAX */
+#include <limits.h>
+#include <errno.h>
 
 /* XXX: va_copy is C99; this workaround is not portable */
 #ifndef va_copy
@@ -408,7 +412,8 @@ vpeerprintf(struct cl_peer *p, const char *fmt, va_list ap)
 {
 	struct peer *peer;
 	va_list ap1;
-	char *buf;
+	char a[1024];
+	char *buf = a;
 	int n;
 
 	assert(p != NULL);
@@ -423,26 +428,36 @@ vpeerprintf(struct cl_peer *p, const char *fmt, va_list ap)
 	va_copy(ap1, ap);
 
 	/* XXX: vsnprintf is C99 */
-	n = vsnprintf(NULL, 0, fmt, ap);
-
-	assert(n != -1);
+	n = vsnprintf(a, sizeof a, fmt, ap);
 
 	if (n == 0) {
 		return 0;
 	}
 
-	buf = malloc(n + 1);
-	if (buf == NULL) {
+	if (n > SSIZE_MAX) {
+		errno = EINVAL;
 		return -1;
 	}
 
-	vsnprintf(buf, n + 1, fmt, ap1);
-	va_end(ap1);
+	assert(n != -1);
+	assert(n < SIZE_MAX);
+	assert(n < SSIZE_MAX);
 
-	/* XXX: ssize_t -> int */
-	n = write(peer->fd, buf, n);
+	if (n > sizeof a) {
+		buf = malloc(n + 1);
+		if (buf == NULL) {
+			return -1;
+		}
 
-	free(buf);
+		vsnprintf(buf, n + 1, fmt, ap1);
+		va_end(ap1);
+	}
+
+	n = (int) write(peer->fd, buf, n);
+
+	if (buf != a) {
+		free(buf);
+	}
 
 	return n;
 }
@@ -568,7 +583,7 @@ main(int argc, char **argv)
 				FD_SET(i, &master);
 				maxfd = MAX(maxfd, i);
 
-				peer = cl_accept(tree, CL_TELNET);
+				peer = cl_accept(tree, i, CL_TELNET);
 				if (peer == NULL) {
 					perror ("cl_accept");
 					return 1;
@@ -586,7 +601,10 @@ main(int argc, char **argv)
 				/* XXX: loop until everything is read? no, by contract a single
 				 * command will be consumed per cl_read() call. no, can't do that;
 				 * we might not *have* a full command. So this is pot luck... */
-				cl_read(peer, "show motd\n", 10);
+				if (-1 == cl_read(peer, "show motd\n", 10)) {
+					perror("cl_read");
+					return 1;
+				}
 			}
 
 			for (i = 0; i <= maxfd; ++i) {
@@ -616,7 +634,9 @@ main(int argc, char **argv)
 
 				assert(peer != NULL);
 
-				if (!cl_read(peer, buf, (size_t) n)) {
+				if (-1 == cl_read(peer, buf, (size_t) n)) {
+					perror("cl_read");
+
 					/* TODO: remove peer from peers ll */
 					FD_CLR(i, &master);
 					close(i);

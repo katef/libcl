@@ -16,6 +16,7 @@ PROG= ${.CURDIR:T}
 LDFLAGS+= -L${OBJ_DIR}/src
 
 LIBS+= -lcl
+LIBS+= -ltermkey
 
 .include <lx.prog.mk>
 

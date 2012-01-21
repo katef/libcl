@@ -11,6 +11,8 @@ SRCS+= field.c
 
 SRCS+= read.c
 SRCS+= plain.c
+SRCS+= ecma48.c
+SRCS+= telnet.c
 
 .include <lx.obj.mk>
 

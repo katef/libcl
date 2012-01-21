@@ -59,7 +59,7 @@ struct cl_field {
  *
  *  command  - List of words. Each word is seperated by a single space, ' '.
  *             Non-space characters are taken to be part of a word.
- *             The list may not begin or end with a space.
+ *             The list may not begin or end with a space, and may not be empty.
  *  modes    - A mask of user-defined modes for which this command is available.
  *  fields   - A mask of user-defined fields for which the user is prompted on
  *             execution of this command. Each bit within this mask corresponds
@@ -139,13 +139,19 @@ void cl_destroy(struct cl_tree *t);
  * A peer is active until closed by cl_close().
  *
  * Each peer carries its own independent state for its user interface, including
- * its mode and prompt.
+ * its mode and prompt. An fd may optionally be passed if appropriate; if given,
+ * depending on the type of device to which the descriptor is attached, that
+ * device may be reconfigured to suit libcl - for example, to turn of character
+ * echoing.
  *
  *  t  - The command tree for which the new peer will execute commands.
  *       The command tree is required to persist until a call to cl_close().
+ *  fd - An optional POSIX file descriptor, should the peer represent an fd.
+ *       For example an accept()ed socket, or STDIN_FILENO).
+ *       Pass -1 where no fd is appropriate.
  *  io - The protocol by which user input is given. See enum cl_io for details.
  */
-struct cl_peer *cl_accept(struct cl_tree *t, enum cl_io io);
+struct cl_peer *cl_accept(struct cl_tree *t, int fd, enum cl_io io);
 void cl_close(struct cl_peer *p);
 
 /*
