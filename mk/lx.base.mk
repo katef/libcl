@@ -45,7 +45,7 @@ XMLLINT=  xmllint  # from xmlsoft.org
 
 FSM=      ${OBJ_DIR}/src/bin/fsm/fsm
 
-CFLAGS=
+CFLAGS=    -D_POSIX_C_SOURCE
 SIDFLAGS=  -l ansi-c
 LEXIFLAGS=
 XSLTFLAGS= --nonet --novalid --nowrite --nomkdir --xincludestyle
