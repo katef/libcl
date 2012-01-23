@@ -155,7 +155,9 @@ getc_main(struct cl_peer *p, struct cl_event *event)
 				return 0;
 			}
 
-cl_printf(p, "\b \b");	/* XXX: ask I/O layer */
+			if (-1 == term_output(p, OUT_BACKSPACE_AND_DELETE)) {
+				return -1;
+			}
 
 			p->rctx->count--;
 

@@ -8,6 +8,7 @@ CFLAGS+= -I ${BASE_DIR}/include
 SRCS+= cl.c
 SRCS+= trie.c
 SRCS+= field.c
+SRCS+= term.c
 
 SRCS+= read.c
 SRCS+= plain.c

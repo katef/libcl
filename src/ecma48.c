@@ -14,10 +14,11 @@
 
 struct ioctx {
 	TermKey *tk;
+	int save;
 };
 
 static struct ioctx *
-create_ecma48(int fd)
+ecma48_create(int fd)
 {
 	struct ioctx *new;
 
@@ -33,11 +34,13 @@ create_ecma48(int fd)
 		return NULL;
 	}
 
+	new->save = -1;
+
 	return new;
 }
 
 static void
-destroy_ecma48(struct ioctx *ioctx)
+ecma48_destroy(struct ioctx *ioctx)
 {
 	assert(ioctx != NULL);
 	assert(ioctx->tk != NULL);
@@ -47,7 +50,7 @@ destroy_ecma48(struct ioctx *ioctx)
 }
 
 static ssize_t
-read_ecma48(struct cl_peer *p, struct ioctx *ioctx, const void *data, size_t len)
+ecma48_recv(struct cl_peer *p, struct ioctx *ioctx, const void *data, size_t len)
 {
 	TermKeyKey key;
 	size_t n;
@@ -160,9 +163,93 @@ read_ecma48(struct cl_peer *p, struct ioctx *ioctx, const void *data, size_t len
 	return n;
 }
 
+static ssize_t
+ecma48_send(struct cl_peer *p, struct ioctx *ioctx, const struct cl_output *output)
+{
+	ssize_t n = 0;
+
+	assert(p != NULL);
+	assert(p->tree != NULL);
+	assert(p->tree->vprintf != NULL);
+	assert(ioctx != NULL);
+	assert(output != NULL);
+
+	switch (output->type) {
+	case OUT_PRINTF:
+		n = p->tree->vprintf(p, output->u.printf.fmt, output->u.printf.ap);
+
+		if (ioctx->save != -1) {
+			if (ioctx->save > INT_MAX - n) {
+				errno = ENOMEM;
+				return -1;
+			}
+
+			if (n != -1) {
+				ioctx->save += n;
+			}
+		}
+
+		break;
+
+	case OUT_BACKSPACE_AND_DELETE:
+		if (p->term.cub1 == NULL) {
+			return 0;
+		}
+
+		if (p->term.dch1 != NULL) {
+			n = p->tree->printf(p, "%s%s",
+				p->term.cub1,
+				p->term.dch1);
+		} else {
+			n = p->tree->printf(p, "%s %s",
+				p->term.cub1,
+				p->term.cub1);
+		}
+
+		break;
+
+	case OUT_SAVE:
+		if (p->term.sc == NULL || p->term.rc == NULL) {
+			ioctx->save = 0;
+			return 0;
+		}
+
+		n = p->tree->printf(p, "%s",
+			p->term.sc);
+
+		break;
+
+	case OUT_RESTORE_AND_DELETE_TO_EOL:
+		if (p->term.sc == NULL || p->term.rc == NULL) {
+			ssize_t x;
+
+			for (n = 0; ioctx->save-- > 0; n += x) {
+				struct cl_output o;
+
+				o.type = OUT_BACKSPACE_AND_DELETE;
+
+				x = ecma48_send(p, ioctx, &o);
+				if (x == -1) {
+					return -1;
+				}
+			}
+
+			break;
+		}
+
+		n = p->tree->printf(p, "%s",
+			p->term.rc);
+
+		break;
+	}
+
+	return n;
+}
+
 struct io io_ecma48 = {
-	create_ecma48,
-	destroy_ecma48,
-	read_ecma48
+	ecma48_create,
+	ecma48_destroy,
+	ecma48_recv,
+	ecma48_send
 };
 

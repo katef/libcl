@@ -17,6 +17,7 @@ LDFLAGS+= -L${OBJ_DIR}/src
 
 LIBS+= -lcl
 LIBS+= -ltermkey
+LIBS+= -lunibilium
 
 .include <lx.prog.mk>
 

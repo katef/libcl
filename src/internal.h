@@ -29,6 +29,13 @@ enum ui_event {
 	UI_CURSOR_SOL
 };
 
+enum ui_output {
+	OUT_PRINTF,
+	OUT_BACKSPACE_AND_DELETE,
+	OUT_SAVE,
+	OUT_RESTORE_AND_DELETE_TO_EOL
+};
+
 struct cl_peer;
 struct cl_command;
 
@@ -43,6 +50,7 @@ struct cl_tree {
 	int (*printprompt)(struct cl_peer *p, int mode);
 	int (*visible)(struct cl_peer *p, int mode, int modes);
 	int (*vprintf)(struct cl_peer *p, const char *fmt, va_list ap);
+	int (*printf)(struct cl_peer *p, const char *fmt, ...);
 };
 
 struct cl_event {
@@ -53,12 +61,32 @@ struct cl_event {
 	} u;
 };
 
+struct cl_output {
+	enum ui_output type;
+
+	union {
+		struct {
+			const char *fmt;
+			va_list ap;
+		} printf;
+	} u;
+};
+
+struct cl_term {
+	const char *cub1; /* cursor left */
+	const char *dch1; /* delete character */
+	const char *el;   /* clear to EOL */
+	const char *sc;   /* save cursor */
+	const char *rc;   /* restore cursor */
+};
+
 struct ioctx;
 
 struct io {
 	struct ioctx *(*create)(int fd);
 	void          (*destroy)(struct ioctx *p);
 	ssize_t       (*read)(struct cl_peer *p, struct ioctx *ioctx, const void *data, size_t len);
+	ssize_t       (*send)(struct cl_peer *p, struct ioctx *ioctx, const struct cl_output *output);
 };
 
 struct trie_command {
@@ -76,9 +104,14 @@ struct trie {
 	struct trie_command *command;
 };
 
+struct termctx;
+
 struct cl_peer {
 	struct cl_tree *tree;
 	int mode;
+
+	struct cl_term term;
+	struct termctx *tctx;
 
 	struct readctx *rctx;
 	struct ioctx  *ioctx;
@@ -97,6 +130,10 @@ struct readctx *read_create(void);
 void read_destroy(struct readctx *read);
 const char *read_get_field(struct readctx *rc, int id);
 int getc_main(struct cl_peer *p, struct cl_event *event);
+
+struct termctx *term_create(struct cl_term *term, const char *name);
+void term_destroy(struct termctx *t);
+int term_output(struct cl_peer *p, enum ui_output type);
 
 extern struct io io_plain;
 extern struct io io_ecma48;

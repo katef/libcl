@@ -10,7 +10,7 @@
 #include "internal.h"
 
 static ssize_t
-read_plain(struct cl_peer *p, struct ioctx *ioctx, const void *data, size_t len)
+plain_read(struct cl_peer *p, struct ioctx *ioctx, const void *data, size_t len)
 {
 	size_t i;
 
@@ -39,6 +39,7 @@ read_plain(struct cl_peer *p, struct ioctx *ioctx, const void *data, size_t len)
 struct io io_plain = {
 	NULL,
 	NULL,
-	read_plain
+	plain_read,
+	NULL
 };
 

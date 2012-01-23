@@ -10,7 +10,7 @@
 #include "internal.h"
 
 static ssize_t
-read_telnet(struct cl_peer *p, struct ioctx *ioctx, const void *data, size_t len)
+telnet_read(struct cl_peer *p, struct ioctx *ioctx, const void *data, size_t len)
 {
 	assert(p != NULL);
 	assert(ioctx != NULL);
@@ -24,6 +24,7 @@ read_telnet(struct cl_peer *p, struct ioctx *ioctx, const void *data, size_t len
 struct io io_telnet = {
 	NULL,
 	NULL,
-	read_telnet
+	telnet_read,
+	NULL
 };
 

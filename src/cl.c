@@ -12,6 +12,24 @@
 
 #include "internal.h"
 
+static int
+tree_printf(struct cl_peer *p, const char *fmt, ...)
+{
+	va_list ap;
+	int n;
+
+	assert(p != NULL);
+	assert(p->tree != NULL);
+	assert(p->tree->vprintf != NULL);
+	assert(fmt != NULL);
+
+	va_start(ap, fmt);
+	n = p->tree->vprintf(p, fmt, ap);
+	va_end(ap);
+
+	return n;
+}
+
 struct cl_tree *
 cl_create(size_t command_count, const struct cl_command commands[],
 	size_t field_count, const struct cl_field fields[],
@@ -35,6 +53,7 @@ cl_create(size_t command_count, const struct cl_command commands[],
 	new->printprompt   = printprompt;
 	new->visible       = visible;
 	new->vprintf       = vprintf;
+	new->printf        = tree_printf;
 
 	new->commands      = commands;
 	new->command_count = command_count;
@@ -105,6 +124,15 @@ cl_accept(struct cl_tree *t, int fd, enum cl_io io)
 		}
 	}
 
+	/* TODO: get terminal name from I/O layer... telnet, getenv, etc */
+	new->tctx = term_create(&new->term, "xterm");
+	if (new->tctx == NULL) {
+		new->io.destroy(new->ioctx);
+		read_destroy(new->rctx);
+		free(new);
+		return NULL;
+	}
+
 	if (-1 == new->tree->printprompt(new, new->mode)) {
 		if (new->io.destroy != NULL) {
 			new->io.destroy(new->ioctx);
@@ -167,12 +195,18 @@ cl_printf(struct cl_peer *p, const char *fmt, ...)
 int
 cl_vprintf(struct cl_peer *p, const char *fmt, va_list ap)
 {
+	struct cl_output o;
+
 	assert(p != NULL);
 	assert(p->tree != NULL);
 	assert(p->tree->vprintf != NULL);
 	assert(fmt != NULL);
 
-	return p->tree->vprintf(p, fmt, ap);
+	o.type         = OUT_PRINTF;
+	o.u.printf.fmt = fmt;
+	o.u.printf.ap  = ap;
+
+	return p->io.send(p, p->ioctx, &o);
 }
 
 ssize_t
