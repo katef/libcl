@@ -26,8 +26,8 @@ create_ecma48(int fd)
 		return NULL;
 	}
 
-	/* TODO: TERMKEY_FLAG_UTF8? */
-	new->tk = termkey_new(fd, TERMKEY_FLAG_CTRLC);
+	/* TODO: TERMKEY_FLAG_UTF8? CTRLC? */
+	new->tk = termkey_new(fd, 0);
 	if (new->tk == NULL) {
 		free(new);
 		return NULL;
@@ -77,8 +77,15 @@ read_ecma48(struct cl_peer *p, struct ioctx *ioctx, const void *data, size_t len
 
 		switch (key.type) {
 		case TERMKEY_TYPE_MOUSE:
-		case TERMKEY_TYPE_FUNCTION:
 			continue;
+
+		case TERMKEY_TYPE_FUNCTION:
+			switch (key.code.number) {
+			case 1: e.type = UI_CODEPOINT; e.u.utf8 = "?";  break;
+
+			default:
+				continue;
+			}
 
 		case TERMKEY_TYPE_KEYSYM:
 			assert(key.code.sym != TERMKEY_SYM_NONE);
