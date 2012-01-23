@@ -6,6 +6,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 
 #include "internal.h"
 
@@ -24,11 +25,46 @@ struct value {
 
 struct readctx {
 	enum readstate state;
-	struct trie *t;
+	const struct trie *t;
 	int fields;
 	struct value *values;
 	size_t count;
 };
+
+static void *
+append(void *base, size_t basesz, size_t *count, const char *s)
+{
+	const size_t blocksz = 32;
+	size_t n;
+
+	assert(base != NULL);
+	assert(basesz > 0);
+	assert(count != NULL);
+	assert(s != NULL);
+
+	n = strlen(s);
+
+	assert(n != 0);
+	assert(n < blocksz);
+
+	if (*count > INT_MAX - n) {
+		errno = ENOMEM;
+		return NULL;
+	}
+
+	if ((*count + n) % blocksz == 0) {
+		base = realloc(base, basesz + *count + blocksz);
+		if (base == NULL) {
+			return NULL;
+		}
+	}
+
+	memcpy((char *) base + basesz + *count, s, n);
+
+	*count += n;
+
+	return base;
+}
 
 static void
 fieldprompt(struct cl_peer *p)
@@ -51,7 +87,7 @@ read_create(void)
 {
 	struct readctx *new;
 
-	new = malloc(sizeof *new);
+	new = malloc(sizeof *new + 1);
 	if (new == NULL) {
 		return NULL;
 	}
@@ -100,10 +136,10 @@ getc_main(struct cl_peer *p, struct cl_event *event)
 
 	switch (p->rctx->state) {
 	case STATE_NEW:
-		p->rctx->t      = p->tree->root;
 		p->rctx->state  = STATE_CHAR;
 		p->rctx->fields = 0;
 		p->rctx->values = NULL;
+		p->rctx->count  = 0;
 
 		/* FALLTHROUGH */
 
@@ -113,6 +149,18 @@ getc_main(struct cl_peer *p, struct cl_event *event)
 			break;
 
 		case UI_BACKSPACE:
+			/* XXX: this should walk back one unicode character's worth, not just one byte */
+
+			if (p->rctx->count == 0) {
+				return 0;
+			}
+
+cl_printf(p, "\b \b");	/* XXX: ask I/O layer */
+
+			p->rctx->count--;
+
+			return 0;
+
 		case UI_DELETE:
 		case UI_DELETE_TO_EOL:
 		case UI_DELETE_WORD:
@@ -145,14 +193,43 @@ getc_main(struct cl_peer *p, struct cl_event *event)
 
 			p->tree->printprompt(p, p->mode);
 
-			/* TODO: print current user input line buffer. maybe make this part of prompting */
-			cl_printf(p, "...TODO");
+			assert(p->rctx->count <= INT_MAX);
+
+			cl_printf(p, "%.*s", (int) p->rctx->count, (const char *) p->rctx + sizeof *p->rctx);
 
 			p->rctx->state = STATE_CHAR;
 			return 0;
 
+		case '\t':
+			/* TODO: not implemented */
+			return 0;
+
 		case '\n':
 			cl_printf(p, "\n");
+
+			{
+				unsigned char *u;
+
+				u = (unsigned char *) p->rctx + sizeof *p->rctx;
+
+/* XXX: why do this? also remove the +1 */
+/* currently doing it for the benefit of trie traveral, below */
+				u[p->rctx->count] = '\0';
+
+				for (p->rctx->t = p->tree->root; *u != '\0'; u++) {
+					/* TODO: skip excess whitespace here */
+
+					p->rctx->t = p->rctx->t->edge[*u];
+					if (p->rctx->t == NULL) {
+						cl_printf(p, "command not found\n");
+
+						p->tree->printprompt(p, p->mode);
+
+						p->rctx->state = STATE_NEW;
+						return 0;
+					}
+				}
+			}
 
 			if (p->rctx->t == p->tree->root) {
 				p->tree->printprompt(p, p->mode);
@@ -184,23 +261,19 @@ getc_main(struct cl_peer *p, struct cl_event *event)
 			goto firstfield;
 
 		default:
+			/* TODO: maybe not for IO_PLAIN */
+			cl_printf(p, "%s", event->u.utf8);
+
 			{
-				const char *u;
+				struct readctx *tmp;
 
-				/* TODO: maybe not for IO_PLAIN */
-				cl_printf(p, "%s", event->u.utf8);
-
-				for (u = event->u.utf8; *u != '\0'; u++) {
-					p->rctx->t = p->rctx->t->edge[(unsigned char) *u];
-					if (p->rctx->t == NULL) {
-						cl_printf(p, "\n");	/* XXX: remove when deadzone implemented */
-
-						/* TODO: switch state to a "dead zone". count excess characters, and decrement on backspace */
-
-						cl_printf(p, "command not found\n");
-						return -1;
-					}
+				tmp = append(p->rctx, sizeof *p->rctx,
+					&p->rctx->count, event->u.utf8);
+				if (tmp == NULL) {
+					return -1;
 				}
+
+				p->rctx = tmp;
 			}
 
 			return 0;
@@ -244,6 +317,7 @@ getc_main(struct cl_peer *p, struct cl_event *event)
 
 		switch (event->u.utf8[0]) {
 		case '\n':
+			p->rctx->values->value = (char *) p->rctx->values + sizeof *p->rctx->values;
 			p->rctx->values->value[p->rctx->count] = '\0';
 
 			p->rctx->fields &= p->rctx->fields - 1;
@@ -285,34 +359,20 @@ firstfield:
 			return 0;
 
 		default:
+			/* TODO: only if echoing for this field */
+			cl_printf(p, "%s", event->u.utf8);
+
 			{
-				size_t n;
+				struct value *tmp;
 
-				n = strlen(event->u.utf8);
-
-				assert(n != 0);
-				assert(n < 32);
-
-				/* TODO: only if echoing for this field */
-				cl_printf(p, "%s", event->u.utf8);
-
-				if ((p->rctx->count + n) % 32 == 0) {
-					struct value *tmp;
-
-					tmp = realloc(p->rctx->values, sizeof *p->rctx->values + p->rctx->count + 32);
-					if (tmp == NULL) {
-						/* TODO: free .values list */
-						return -1;
-					}
-
-					tmp->value = (char *) tmp + sizeof *tmp;
-
-					p->rctx->values = tmp;
+				tmp = append(p->rctx->values, sizeof *p->rctx->values,
+					&p->rctx->count, event->u.utf8);
+				if (tmp == NULL) {
+					/* TODO: free .values list */
+					return -1;
 				}
 
-				memcpy(p->rctx->values->value, event->u.utf8, n);
-
-				p->rctx->count += n;
+				p->rctx->values = tmp;
 			}
 
 			return 0;
