@@ -36,6 +36,7 @@ append(void *base, size_t basesz, size_t *count, const char *s)
 {
 	const size_t blocksz = 32;
 	size_t n;
+	size_t prev;
 
 	assert(base != NULL);
 	assert(basesz > 0);
@@ -52,16 +53,19 @@ append(void *base, size_t basesz, size_t *count, const char *s)
 		return NULL;
 	}
 
-	if ((*count + n) % blocksz == 0) {
-		base = realloc(base, basesz + *count + blocksz);
+	prev = *count;
+
+	/* we're assigning up here because realloc below may move count */
+	*count += n;
+
+	if ((*count - 1) % blocksz < n) {
+		base = realloc(base, basesz + prev + blocksz);
 		if (base == NULL) {
 			return NULL;
 		}
 	}
 
-	memcpy((char *) base + basesz + *count, s, n);
-
-	*count += n;
+	memcpy((char *) base + basesz + prev, s, n);
 
 	return base;
 }
@@ -214,8 +218,6 @@ getc_main(struct cl_peer *p, struct cl_event *event)
 
 				u = (unsigned char *) p->rctx + sizeof *p->rctx;
 
-/* XXX: why do this? also remove the +1 */
-/* currently doing it for the benefit of trie traveral, below */
 				u[p->rctx->count] = '\0';
 
 				for (p->rctx->t = p->tree->root; *u != '\0'; u++) {
