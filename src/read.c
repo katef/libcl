@@ -159,7 +159,7 @@ getc_main(struct cl_peer *p, struct cl_event *event)
 				return 0;
 			}
 
-			if (-1 == term_output(p, OUT_BACKSPACE_AND_DELETE)) {
+			if (-1 == p->chctx->ioapi->send(p, p->chctx + 0, OUT_BACKSPACE_AND_DELETE)) {
 				return -1;
 			}
 

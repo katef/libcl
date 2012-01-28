@@ -53,7 +53,7 @@ term_create(struct cl_term *term, const char *name)
 
 		*p = unibi_get_str(new->ut, a[i].id);
 
-		if (*p == NULL) {
+		if (a[i].required && *p == NULL) {
 			unibi_destroy(new->ut);
 			free(new);
 			return NULL;
@@ -72,20 +72,5 @@ term_destroy(struct termctx *tctx)
 	unibi_destroy(tctx->ut);
 
 	free(tctx);
-}
-
-int
-term_output(struct cl_peer *p, enum ui_output type)
-{
-	struct cl_output o;
-
-	assert(p != NULL);
-	assert(p->io.send != NULL);
-	assert(p->ioctx != NULL);
-	assert(type != OUT_PRINTF);
-
-	o.type = type;
-
-	return p->io.send(p, p->ioctx, &o);
 }
 

@@ -10,21 +10,24 @@
 #include "internal.h"
 
 static ssize_t
-telnet_read(struct cl_peer *p, struct ioctx *ioctx, const void *data, size_t len)
+telnet_read(struct cl_peer *p, struct cl_chctx chctx[],
+	const void *data, size_t len)
 {
 	assert(p != NULL);
-	assert(ioctx != NULL);
+	assert(chctx != NULL);
 	assert(data != NULL);
 
 	/* TODO: ... */
 
-	return io_ecma48.read(p, ioctx, data, len);
+	return (chctx - 1)->ioapi->read(p, chctx - 1, data, len);
 }
 
 struct io io_telnet = {
 	NULL,
 	NULL,
 	telnet_read,
+	NULL,
+	NULL,
 	NULL
 };
 

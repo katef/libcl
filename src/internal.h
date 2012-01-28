@@ -30,7 +30,6 @@ enum ui_event {
 };
 
 enum ui_output {
-	OUT_PRINTF,
 	OUT_BACKSPACE_AND_DELETE,
 	OUT_SAVE,
 	OUT_RESTORE_AND_DELETE_TO_EOL
@@ -50,7 +49,6 @@ struct cl_tree {
 	int (*printprompt)(struct cl_peer *p, int mode);
 	int (*visible)(struct cl_peer *p, int mode, int modes);
 	int (*vprintf)(struct cl_peer *p, const char *fmt, va_list ap);
-	int (*printf)(struct cl_peer *p, const char *fmt, ...);
 };
 
 struct cl_event {
@@ -58,17 +56,6 @@ struct cl_event {
 
 	union {
 		const char *utf8;	/* UI_CODEPOINT */
-	} u;
-};
-
-struct cl_output {
-	enum ui_output type;
-
-	union {
-		struct {
-			const char *fmt;
-			va_list ap;
-		} printf;
 	} u;
 };
 
@@ -81,12 +68,24 @@ struct cl_term {
 };
 
 struct ioctx;
+struct cl_chctx;
 
 struct io {
 	struct ioctx *(*create)(int fd);
 	void          (*destroy)(struct ioctx *p);
-	ssize_t       (*read)(struct cl_peer *p, struct ioctx *ioctx, const void *data, size_t len);
-	ssize_t       (*send)(struct cl_peer *p, struct ioctx *ioctx, const struct cl_output *output);
+	ssize_t       (*read)(struct cl_peer *p, struct cl_chctx *chctx,
+	                      const void *data, size_t len);
+	ssize_t       (*send)(struct cl_peer *p, struct cl_chctx *chctx,
+	                      enum ui_output output);
+	int           (*vprintf)(struct cl_peer *p, struct cl_chctx *chctx,
+	                         const char *fmt, va_list ap);
+	int           (*printf)(struct cl_peer *p, struct cl_chctx *chctx,
+	                         const char *fmt, ...);
+};
+
+struct cl_chctx {
+	const struct io *ioapi;
+	struct ioctx    *ioctx;
 };
 
 struct trie_command {
@@ -106,16 +105,18 @@ struct trie {
 
 struct termctx;
 
+struct cl_chain;
+
 struct cl_peer {
 	struct cl_tree *tree;
 	int mode;
 
 	struct cl_term term;
 	struct termctx *tctx;
-
 	struct readctx *rctx;
-	struct ioctx  *ioctx;
-	struct io io;
+	struct cl_chctx *chctx;
+
+	const struct cl_chain *chain;
 
 	void *opaque;
 };
@@ -133,11 +134,6 @@ int getc_main(struct cl_peer *p, struct cl_event *event);
 
 struct termctx *term_create(struct cl_term *term, const char *name);
 void term_destroy(struct termctx *t);
-int term_output(struct cl_peer *p, enum ui_output type);
-
-extern struct io io_plain;
-extern struct io io_ecma48;
-extern struct io io_telnet;
 
 #endif
 

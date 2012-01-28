@@ -12,22 +12,37 @@
 
 #include "internal.h"
 
-static int
-tree_printf(struct cl_peer *p, const char *fmt, ...)
+extern struct io io_start;
+extern struct io io_ecma48;
+extern struct io io_telnet;
+extern struct io io_end;
+
+static const struct cl_chain {
+	enum cl_io io;
+	size_t n;
+	const struct io *ioapi[4];
+} io_chains[] = {
+	{ CL_PLAIN,  2, { &io_start,                         &io_end } },
+	{ CL_ECMA48, 3, { &io_start, &io_ecma48,             &io_end } },
+	{ CL_TELNET, 4, { &io_start, &io_ecma48, &io_telnet, &io_end } }
+#if 0
+	{ CL_SSL,    4, { &io_start, &io_ecma48, &io_ssl,    &io_end } },
+	{ CL_SSH,    4, { &io_start, &io_ecma48, &io_ssh,    &io_end } }
+#endif
+};
+
+static const struct cl_chain *
+findchain(enum cl_io io)
 {
-	va_list ap;
-	int n;
+	size_t i;
 
-	assert(p != NULL);
-	assert(p->tree != NULL);
-	assert(p->tree->vprintf != NULL);
-	assert(fmt != NULL);
+	for (i = 0; i < sizeof io_chains / sizeof *io_chains; i++) {
+		if (io_chains[i].io == io) {
+			return &io_chains[i];
+		}
+	}
 
-	va_start(ap, fmt);
-	n = p->tree->vprintf(p, fmt, ap);
-	va_end(ap);
-
-	return n;
+	return NULL;
 }
 
 struct cl_tree *
@@ -53,7 +68,6 @@ cl_create(size_t command_count, const struct cl_command commands[],
 	new->printprompt   = printprompt;
 	new->visible       = visible;
 	new->vprintf       = vprintf;
-	new->printf        = tree_printf;
 
 	new->commands      = commands;
 	new->command_count = command_count;
@@ -63,8 +77,8 @@ cl_create(size_t command_count, const struct cl_command commands[],
 	for (i = 0; i < command_count; i++) {
 		struct trie *node;
 
-		/* things to assert about .command: does not start with space; all alnum or ' '; all isprint;
-		 * no non-' ' whitespace; is not empty */
+		/* things to assert about .command: does not start with space;
+		 * all alnum or ' '; all isprint; no non-' ' whitespace; is not empty */
 		node = trie_add(&new->root, commands[i].command, &commands[i]);
 		if (node == NULL) {
 			cl_destroy(new);
@@ -84,6 +98,7 @@ struct cl_peer *
 cl_accept(struct cl_tree *t, int fd, enum cl_io io)
 {
 	struct cl_peer *new;
+	size_t i;
 
 	assert(t != NULL);
 
@@ -92,8 +107,21 @@ cl_accept(struct cl_tree *t, int fd, enum cl_io io)
 		return NULL;
 	}
 
+	new->chain = findchain(io);
+	if (new->chain == NULL) {
+		free(new);
+		return NULL;
+	}
+
+	new->chctx = malloc(sizeof *new->chctx * new->chain->n);
+	if (new->chctx == NULL) {
+		free(new);
+		return NULL;
+	}
+
 	new->rctx = read_create();
 	if (new->rctx == NULL) {
+		free(new->chctx);
 		free(new);
 		return NULL;
 	}
@@ -102,43 +130,34 @@ cl_accept(struct cl_tree *t, int fd, enum cl_io io)
 	new->mode   = 0;
 	new->opaque = NULL;
 
-	switch (io) {
-	case CL_PLAIN:  new->io = io_plain;  break;
-	case CL_TELNET: new->io = io_telnet; break;
-	case CL_ECMA48: new->io = io_ecma48; break;
-
-	default:
+	/* TODO: get terminal name from I/O layer... telnet, getenv, etc */
+	new->tctx = term_create(&new->term, "xterm");
+	if (new->tctx == NULL) {
+		free(new->chctx);
 		read_destroy(new->rctx);
 		free(new);
-
-		errno = EINVAL;
 		return NULL;
 	}
 
-	if (new->io.create != NULL) {
-		new->ioctx = new->io.create(fd);
-		if (new->ioctx == NULL) {
-			read_destroy(new->rctx);
-			free(new);
+	for (i = 0; i < new->chain->n; i++) {
+		new->chctx[i].ioapi = new->chain->ioapi[i];
+		new->chctx[i].ioctx = NULL;
+	}
+
+	for (i = 0; i < new->chain->n; i++) {
+		if (new->chain->ioapi[i]->create == NULL) {
+			continue;
+		}
+
+		new->chctx[i].ioctx = new->chain->ioapi[i]->create(fd);
+		if (new->chctx[i].ioctx == NULL) {
+			cl_close(new);
 			return NULL;
 		}
 	}
 
-	/* TODO: get terminal name from I/O layer... telnet, getenv, etc */
-	new->tctx = term_create(&new->term, "xterm");
-	if (new->tctx == NULL) {
-		new->io.destroy(new->ioctx);
-		read_destroy(new->rctx);
-		free(new);
-		return NULL;
-	}
-
 	if (-1 == new->tree->printprompt(new, new->mode)) {
-		if (new->io.destroy != NULL) {
-			new->io.destroy(new->ioctx);
-		}
-		read_destroy(new->rctx);
-		free(new);
+		cl_close(new);
 		return NULL;
 	}
 
@@ -148,6 +167,24 @@ cl_accept(struct cl_tree *t, int fd, enum cl_io io)
 void
 cl_close(struct cl_peer *p)
 {
+	size_t i;
+
+	assert(p != NULL);
+	assert(p->tctx != NULL);
+	assert(p->rctx != NULL);
+	assert(p->chain != NULL);
+
+	term_destroy(p->tctx);
+	read_destroy(p->rctx);
+
+	for (i = 0; i < p->chain->n; i++) {
+		if (p->chain->ioapi[i]->destroy != NULL) {
+			p->chain->ioapi[i]->destroy(p->chctx[i].ioctx);
+		}
+	}
+
+	free(p->chctx);
+	free(p);
 }
 
 void
@@ -195,30 +232,33 @@ cl_printf(struct cl_peer *p, const char *fmt, ...)
 int
 cl_vprintf(struct cl_peer *p, const char *fmt, va_list ap)
 {
-	struct cl_output o;
-
 	assert(p != NULL);
 	assert(p->tree != NULL);
-	assert(p->tree->vprintf != NULL);
 	assert(fmt != NULL);
 
-	o.type         = OUT_PRINTF;
-	o.u.printf.fmt = fmt;
-	o.u.printf.ap  = ap;
-
-	return p->io.send(p, p->ioctx, &o);
+	return p->chctx->ioapi->vprintf(p, &p->chctx[0], fmt, ap);
 }
 
 ssize_t
 cl_read(struct cl_peer *p, const void *data, size_t len)
 {
+	struct cl_chctx *tail;
+
 	assert(p != NULL);
 	assert(p->tree != NULL);
-	assert(p->ioctx != NULL);
+	assert(p->chctx != NULL);
 	assert(data != NULL);
 	assert(len <= SSIZE_MAX);
 
-	return p->io.read(p, p->ioctx, data, len);
+	if (len == 0) {
+		return 0;
+	}
+
+	tail = &p->chctx[p->chain->n - 1];
+
+	assert(tail->ioapi != NULL);
+
+	return tail->ioapi->read(p, tail, data, len);
 }
 
 void

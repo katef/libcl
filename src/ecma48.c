@@ -8,6 +8,7 @@
 
 #include <assert.h>
 #include <stddef.h>
+#include <stdarg.h>
 #include <errno.h>
 
 #include "internal.h"
@@ -50,14 +51,23 @@ ecma48_destroy(struct ioctx *ioctx)
 }
 
 static ssize_t
-ecma48_recv(struct cl_peer *p, struct ioctx *ioctx, const void *data, size_t len)
+ecma48_recv(struct cl_peer *p, struct cl_chctx chctx[],
+	const void *data, size_t len)
 {
+	struct cl_chctx *prev;
 	TermKeyKey key;
 	size_t n;
 
 	assert(p != NULL);
-	assert(ioctx->tk != NULL);
+	assert(chctx != NULL);
+	assert(chctx->ioctx != NULL);
+	assert(chctx->ioctx->tk != NULL);
+	assert(chctx->ioapi->read == ecma48_recv);
 	assert(data != NULL);
+
+	prev = chctx - 1;
+
+	(void) prev;
 
 	if (len == 0) {
 		return 0;
@@ -68,14 +78,14 @@ ecma48_recv(struct cl_peer *p, struct ioctx *ioctx, const void *data, size_t len
 		return -1;
 	}
 
-	n = termkey_push_bytes(ioctx->tk, data, len);
+	n = termkey_push_bytes(chctx->ioctx->tk, data, len);
 	if ((size_t) -1 == n) {
 		return -1;
 	}
 
 	assert(n > 0);
 
-	while (termkey_getkey(ioctx->tk, &key) == TERMKEY_RES_KEY) {
+	while (termkey_getkey(chctx->ioctx->tk, &key) == TERMKEY_RES_KEY) {
 		struct cl_event e;
 
 		switch (key.type) {
@@ -164,44 +174,39 @@ ecma48_recv(struct cl_peer *p, struct ioctx *ioctx, const void *data, size_t len
 }
 
 static ssize_t
-ecma48_send(struct cl_peer *p, struct ioctx *ioctx, const struct cl_output *output)
+ecma48_send(struct cl_peer *p, struct cl_chctx chctx[],
+	enum ui_output output)
 {
+	struct cl_chctx *next;
 	ssize_t n = 0;
 
 	assert(p != NULL);
 	assert(p->tree != NULL);
 	assert(p->tree->vprintf != NULL);
-	assert(ioctx != NULL);
-	assert(output != NULL);
+	assert(chctx->ioctx != NULL);
+	assert(chctx->ioapi->send == ecma48_send);
+	assert(chctx->ioctx != NULL);
 
-	switch (output->type) {
-	case OUT_PRINTF:
-		n = p->tree->vprintf(p, output->u.printf.fmt, output->u.printf.ap);
+	next = chctx + 1;
 
-		if (ioctx->save != -1) {
-			if (ioctx->save > INT_MAX - n) {
-				errno = ENOMEM;
-				return -1;
-			}
+	assert(next != NULL);
+	assert(next->ioapi != NULL);
+	assert(next->ioapi->printf != NULL);
 
-			if (n != -1) {
-				ioctx->save += n;
-			}
-		}
-
-		break;
-
+	switch (output) {
 	case OUT_BACKSPACE_AND_DELETE:
+		assert(chctx->ioctx->save == -1);
+
 		if (p->term.cub1 == NULL) {
 			return 0;
 		}
 
 		if (p->term.dch1 != NULL) {
-			n = p->tree->printf(p, "%s%s",
+			n = next->ioapi->printf(p, next, "%s%s",
 				p->term.cub1,
 				p->term.dch1);
 		} else {
-			n = p->tree->printf(p, "%s %s",
+			n = next->ioapi->printf(p, next, "%s %s",
 				p->term.cub1,
 				p->term.cub1);
 		}
@@ -209,26 +214,26 @@ ecma48_send(struct cl_peer *p, struct ioctx *ioctx, const struct cl_output *outp
 		break;
 
 	case OUT_SAVE:
+		assert(chctx->ioctx->save == -1);
+
 		if (p->term.sc == NULL || p->term.rc == NULL) {
-			ioctx->save = 0;
+			chctx->ioctx->save = 0;
 			return 0;
 		}
 
-		n = p->tree->printf(p, "%s",
+		n = next->ioapi->printf(p, next, "%s",
 			p->term.sc);
 
 		break;
 
 	case OUT_RESTORE_AND_DELETE_TO_EOL:
+		assert(chctx->ioctx->save != -1);
+
 		if (p->term.sc == NULL || p->term.rc == NULL) {
 			ssize_t x;
 
-			for (n = 0; ioctx->save-- > 0; n += x) {
-				struct cl_output o;
-
-				o.type = OUT_BACKSPACE_AND_DELETE;
-
-				x = ecma48_send(p, ioctx, &o);
+			for (n = 0; chctx->ioctx->save-- > 0; n += x) {
+				x = ecma48_send(p, chctx, OUT_BACKSPACE_AND_DELETE);
 				if (x == -1) {
 					return -1;
 				}
@@ -237,7 +242,7 @@ ecma48_send(struct cl_peer *p, struct ioctx *ioctx, const struct cl_output *outp
 			break;
 		}
 
-		n = p->tree->printf(p, "%s",
+		n = chctx->ioapi->printf(p, chctx, "%s",
 			p->term.rc);
 
 		break;
@@ -246,10 +251,68 @@ ecma48_send(struct cl_peer *p, struct ioctx *ioctx, const struct cl_output *outp
 	return n;
 }
 
+static int
+ecma48_vprintf(struct cl_peer *p, struct cl_chctx chctx[],
+	const char *fmt, va_list ap)
+{
+	struct cl_chctx *next;
+	int n;
+
+	assert(p != NULL);
+	assert(p->tree != NULL);
+	assert(p->tree->vprintf != NULL);
+	assert(chctx->ioctx != NULL);
+	assert(chctx->ioapi->vprintf == ecma48_vprintf);
+	assert(fmt != NULL);
+
+	next = chctx + 1;
+
+	assert(next != NULL);
+	assert(next->ioapi != NULL);
+
+	n = next->ioapi->vprintf(p, next, fmt, ap);
+
+	if (chctx->ioctx->save != -1) {
+		if (chctx->ioctx->save > INT_MAX - n) {
+			errno = ENOMEM;
+			return -1;
+		}
+
+		if (n != -1) {
+			chctx->ioctx->save += n;
+		}
+	}
+
+	return n;
+}
+
+static int
+ecma48_printf(struct cl_peer *p, struct cl_chctx chctx[],
+	const char *fmt, ...)
+{
+	va_list ap;
+	int n;
+
+	assert(p != NULL);
+	assert(p->tree != NULL);
+	assert(p->tree->vprintf != NULL);
+	assert(chctx->ioctx != NULL);
+	assert(chctx->ioapi->printf == ecma48_printf);
+	assert(fmt != NULL);
+
+	va_start(ap, fmt);
+	n = ecma48_vprintf(p, chctx, fmt, ap);
+	va_end(ap);
+
+	return n;
+}
+
 struct io io_ecma48 = {
 	ecma48_create,
 	ecma48_destroy,
 	ecma48_recv,
-	ecma48_send
+	ecma48_send,
+	ecma48_vprintf,
+	ecma48_printf
 };
 

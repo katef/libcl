@@ -10,8 +10,9 @@ SRCS+= trie.c
 SRCS+= field.c
 SRCS+= term.c
 
+SRCS+= start.c
+SRCS+= end.c
 SRCS+= read.c
-SRCS+= plain.c
 SRCS+= ecma48.c
 SRCS+= telnet.c
 
