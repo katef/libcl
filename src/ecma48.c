@@ -9,6 +9,7 @@
 #include <assert.h>
 #include <stddef.h>
 #include <stdarg.h>
+#include <string.h>
 #include <errno.h>
 
 #include "internal.h"
@@ -18,36 +19,75 @@ struct ioctx {
 	int save;
 };
 
-static struct ioctx *
-ecma48_create(int fd)
+static int
+ecma48_create(struct cl_peer *p, struct cl_chctx chctx[])
 {
-	struct ioctx *new;
+	struct cl_chctx *prev;
 
-	new = malloc(sizeof *new);
-	if (new == NULL) {
-		return NULL;
+	assert(p != NULL);
+	assert(strlen(p->ttype) > 0);
+	assert(chctx != NULL);
+	assert(chctx->ioctx == NULL);
+	assert(chctx->ioapi != NULL);
+	assert(chctx->ioapi->create == ecma48_create);
+	assert(chctx->ioapi->ttype != NULL);
+
+	if (p->ttype == NULL) {
+		/* TODO: explain that this happens e.g. without telnet */
+		p->ttype = chctx->ioapi->ttype(p, chctx);
 	}
+
+	chctx->ioctx = malloc(sizeof *chctx->ioctx);
+	if (chctx->ioctx == NULL) {
+		return -1;
+	}
+
+	assert(p->ttype != NULL);
 
 	/* TODO: TERMKEY_FLAG_UTF8? CTRLC? */
-	new->tk = termkey_new(fd, 0);
-	if (new->tk == NULL) {
-		free(new);
-		return NULL;
+	chctx->ioctx->tk = termkey_new_abstract(p->ttype, 0);
+	if (chctx->ioctx->tk == NULL) {
+		free(chctx->ioctx);
+		chctx->ioctx = NULL;
+		return -1;
 	}
 
-	new->save = -1;
+	chctx->ioctx->save = -1;
 
-	return new;
+	prev = chctx - 1;
+
+	assert(prev != NULL);
+	assert(prev->ioapi != NULL);
+	assert(prev->ioapi->create != NULL);
+
+	return prev->ioapi->create(p, prev);
 }
 
 static void
-ecma48_destroy(struct ioctx *ioctx)
+ecma48_destroy(struct cl_peer *p, struct cl_chctx chctx[])
 {
-	assert(ioctx != NULL);
-	assert(ioctx->tk != NULL);
+	struct cl_chctx *next;
 
-	termkey_destroy(ioctx->tk);
-	free(ioctx);
+	assert(p != NULL);
+	assert(chctx != NULL);
+	assert(chctx->ioapi != NULL);
+	assert(chctx->ioapi->destroy == ecma48_destroy);
+
+	if (chctx->ioctx != NULL) {
+		assert(chctx->ioctx->tk != NULL);
+
+		termkey_destroy(chctx->ioctx->tk);
+
+		free(chctx->ioctx);
+	}
+
+	next = chctx + 1;
+
+	assert(next != NULL);
+	assert(next->ioapi != NULL);
+	assert(next->ioapi->destroy != NULL);
+
+	next->ioapi->destroy(p, next);
 }
 
 static ssize_t
@@ -62,6 +102,7 @@ ecma48_recv(struct cl_peer *p, struct cl_chctx chctx[],
 	assert(chctx != NULL);
 	assert(chctx->ioctx != NULL);
 	assert(chctx->ioctx->tk != NULL);
+	assert(chctx->ioapi != NULL);
 	assert(chctx->ioapi->read == ecma48_recv);
 	assert(data != NULL);
 
@@ -184,6 +225,7 @@ ecma48_send(struct cl_peer *p, struct cl_chctx chctx[],
 	assert(p->tree != NULL);
 	assert(p->tree->vprintf != NULL);
 	assert(chctx->ioctx != NULL);
+	assert(chctx->ioapi != NULL);
 	assert(chctx->ioapi->send == ecma48_send);
 	assert(chctx->ioctx != NULL);
 
@@ -262,6 +304,7 @@ ecma48_vprintf(struct cl_peer *p, struct cl_chctx chctx[],
 	assert(p->tree != NULL);
 	assert(p->tree->vprintf != NULL);
 	assert(chctx->ioctx != NULL);
+	assert(chctx->ioapi != NULL);
 	assert(chctx->ioapi->vprintf == ecma48_vprintf);
 	assert(fmt != NULL);
 
@@ -269,6 +312,7 @@ ecma48_vprintf(struct cl_peer *p, struct cl_chctx chctx[],
 
 	assert(next != NULL);
 	assert(next->ioapi != NULL);
+	assert(next->ioapi->vprintf != NULL);
 
 	n = next->ioapi->vprintf(p, next, fmt, ap);
 
@@ -297,6 +341,7 @@ ecma48_printf(struct cl_peer *p, struct cl_chctx chctx[],
 	assert(p->tree != NULL);
 	assert(p->tree->vprintf != NULL);
 	assert(chctx->ioctx != NULL);
+	assert(chctx->ioapi != NULL);
 	assert(chctx->ioapi->printf == ecma48_printf);
 	assert(fmt != NULL);
 
@@ -307,12 +352,28 @@ ecma48_printf(struct cl_peer *p, struct cl_chctx chctx[],
 	return n;
 }
 
+static const char *
+ecma48_ttype(struct cl_peer *p, struct cl_chctx chctx[])
+{
+	struct cl_chctx *next;
+
+	assert(p != NULL);
+
+	next = chctx + 1;
+
+	assert(next->ioapi != NULL);
+	assert(next->ioapi->ttype != NULL);
+
+	return next->ioapi->ttype(p, next);
+}
+
 struct io io_ecma48 = {
 	ecma48_create,
 	ecma48_destroy,
 	ecma48_recv,
 	ecma48_send,
 	ecma48_vprintf,
-	ecma48_printf
+	ecma48_printf,
+	ecma48_ttype
 };
 

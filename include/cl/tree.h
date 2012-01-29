@@ -13,9 +13,12 @@
  *
  *  CL_PLAIN  - Data is taken as-is, with no special parsing. Command line
  *              navigation will not be provided.
+ *
  *  CL_ECMA48 - CSI sequences as used by terminals to encode special keys;
  *              This is typical for stdin connected to a terminal.
+ *
  *  CL_TELNET - The telnet protocol. Typically used for TCP sockets.
+ *
  */
 enum cl_io {
 	CL_PLAIN,
@@ -32,11 +35,15 @@ struct cl_tree;
  * a value for each field when required.
  *
  *  id       - A single-bit unique ID. e.g. (1 << 3)
+ *
  *  name     - A human-readable name for the field. This is used to prompt the user.
  *             e.g. "password".
+ *
  *  echo     - true if the user's input is to be visible as it is entered.
+ *
  *  validate - Returns true if the given value is permissable. If not, the user
  *             will be prompted again, until .validate() returns true.
+ *
  */
 struct cl_field {
 	int id;
@@ -45,10 +52,13 @@ struct cl_field {
 
 	/*
 	 *  p     - The peer responsible for instantiating this call.
+	 *
 	 *  id    - The field ID for which the given value is to be validated.
+	 *
 	 *  value - A string of the user-given value, given verbatim as entered
 	 *          by the user. This includes preceding and trailing whitespace.
 	 *          Storage persists until validate() returns.
+	 *
 	 */
 	int (*validate)(struct cl_peer *p, int id, const char *value);
 };
@@ -60,11 +70,15 @@ struct cl_field {
  *  command  - List of words. Each word is seperated by a single space, ' '.
  *             Non-space characters are taken to be part of a word.
  *             The list may not begin or end with a space, and may not be empty.
+ *
  *  modes    - A mask of user-defined modes for which this command is available.
+ *
  *  fields   - A mask of user-defined fields for which the user is prompted on
  *             execution of this command. Each bit within this mask corresponds
  *             to a unique field ID as per struct cl_field.
+ *
  *  callback - The function to call when the command is executed.
+ *
  *  usage    - A user-facing description. This is displayed by cl_help(). May be
  *             NULL if not required.
  *
@@ -83,16 +97,21 @@ struct cl_command {
 
 	/*
 	 *  p       - The peer responsible for instantiating this call.
+	 *
 	 *  command - A string of the command executed. This is given in canonical
 	 *            form, as specified by struct cl_command (i.e. it may differ
 	 *            from exactly what the user entered).
 	 *            Storage persists until validate() returns.
+	 *
 	 *  mode    - The mode under which this command is currently being executed.
 	 *            This is a single bit from the mask specified by struct cl_command.
+	 *
 	 *  argc    - Argument count. This is the number of elements populated in argv.
+	 *
 	 *  argv    - Argument vector. Each element is a string of a user-given argument
 	 *            following the command. These are vervatim as the user entered,
 	 *            but with whitespace trimmed.
+	 *
  	 */
 	void (*callback)(struct cl_peer *p, const char *command, int mode,
 		int argc, char *argv[]);
@@ -105,18 +124,43 @@ struct cl_command {
  * A command tree is active until destroyed by cl_destroy().
  *
  *  command_count - The number of elements present in commands[].
+ *
  *  commands      - Command specifications from which the tree will be formed.
+ *
  *  field_count   - The number of elements present in fields[].
+ *
  *  fields        - Field specifications from which the tree will be formed.
  *
  * Various callbacks are given, which are called by the library when it needs to
  * do certian things. These are:
  *
+ *  ttype       - Called to identify the peer's terminal type, if no other way
+ *                was found to identify it. Returns NULL if no type is known.
+ *
+ *                Typically this function will return getenv("TERM") for a TTY,
+ *                or an equivalent form. Terminal names are expected to be in a
+ *                form suitable for use by the terminfo database.
+ *                May be NULL if not required.
+ *
+ *                The string return is duplicated internally and may be freed
+ *                after use. XXX: although there is no way to actually do that.
+ *
+ *  motd        - Called once, after a successful cl_accept() when enough data
+ *                has arrived that cl_printf() may be called.
+ *
+ *                Typically this function will call cl_printf() in order to
+ *                print a welcoming message to the user, but may also be used
+ *                for other application-specific post-connection work.
+ *                This is the earliest point at which cl_printf() may be called.
+ *                May be NULL if not required.
+ *
  *  printprompt - To print the user's prompt. Typically this function will call
  *                cl_printf() in order to print to the user. The current mode
  *                is passed; this permits varying prompts per mode.
  *                Returns the number of characters printed, or -1 on error.
+ *
  *  visible     - Returns true if mode is present within the mask of modes.
+ *
  *  vprintf     - Called to perform the gruntwork of printing to the given peer.
  *                Typically this will involve application-specific data
  *                retrieved by cl_get_opaque(). Returns the number of bytes
@@ -127,6 +171,8 @@ struct cl_command {
  */
 struct cl_tree *cl_create(size_t command_count, const struct cl_command commands[],
 	size_t field_count, const struct cl_field fields[],
+	const char *(*ttype)(struct cl_peer *p),
+	int (*motd)(struct cl_peer *p),
 	int (*printprompt)(struct cl_peer *p, int mode),
 	int (*visible)(struct cl_peer *p, int mode, int modes),
 	int (*vprintf)(struct cl_peer *p, const char *fmt, va_list ap));
@@ -136,7 +182,8 @@ void cl_destroy(struct cl_tree *t);
  * Accept a new peer. This is an analogue of POSIX's accept(2) on a listening
  * socket. A new peer instance is returned, or NULL on error.
  *
- * A peer is active until closed by cl_close().
+ * A peer is active until closed by cl_close(). I/O will not be performed until
+ * a call is first made to cl_ready().
  *
  * Each peer carries its own independent state for its user interface, including
  * its mode and prompt. An fd may optionally be passed if appropriate; if given,
@@ -146,13 +193,23 @@ void cl_destroy(struct cl_tree *t);
  *
  *  t  - The command tree for which the new peer will execute commands.
  *       The command tree is required to persist until a call to cl_close().
- *  fd - An optional POSIX file descriptor, should the peer represent an fd.
- *       For example an accept()ed socket, or STDIN_FILENO).
- *       Pass -1 where no fd is appropriate.
+ *
  *  io - The protocol by which user input is given. See enum cl_io for details.
+ *
  */
-struct cl_peer *cl_accept(struct cl_tree *t, int fd, enum cl_io io);
+struct cl_peer *cl_accept(struct cl_tree *t, enum cl_io io);
 void cl_close(struct cl_peer *p);
+
+/*
+ * Indicate a peer is ready to perform I/O. This is required to be called after
+ * cl_accept(). May only be called once per peer.
+ *
+ * These calls are made seperate with the intention that applications may wish
+ * to perform their own initialisation once given a new struct cl_peer *, but
+ * before any I/O is undertaken. Typically this will involve cl_set_opaque() for
+ * the sake of the .vprintf() callback.
+ */
+int cl_ready(struct cl_peer *p);
 
 /*
  * Associate and retrieve application-specific data with a peer. This pointer is
@@ -172,7 +229,9 @@ void *cl_get_opaque(struct cl_peer *p);
  * Storage persists until the next call to cl_get_field.
  *
  *  p  - The peer responsible for prompting for this field.
+ *
  *  id - The field ID for which the given value is to be validated.
+ *
  */
 const char *cl_get_field(struct cl_peer *p, int id);
 
@@ -185,10 +244,12 @@ const char *cl_get_field(struct cl_peer *p, int id);
  * Returns the number of bytes successfully printed, or -1 on error.
  *
  *  p        - The peer to which to print.
+ *
  *  fmt, ... - A format string and variadic arguments as per printf(3).
+ *
  */
-int cl_printf(struct cl_peer *p, const char *fmt, ...);
 int cl_vprintf(struct cl_peer *p, const char *fmt, va_list ap);
+int cl_printf(struct cl_peer *p, const char *fmt, ...);
 
 /*
  * Pass a sequence of incoming bytes from the user to libcl for reading.
@@ -201,7 +262,9 @@ int cl_vprintf(struct cl_peer *p, const char *fmt, va_list ap);
  * consume the entire byte sequence representing that command.
  *
  *  p    - The peer responsible for instantiating this call.
+ *
  *  data - A pointer to the first byte of a sequence of len bytes to consume.
+ *
  *  len  - The number of bytes available. This must be at least 1.
  *
  * Storage for data need not persist after cl_read() returns.
@@ -217,8 +280,10 @@ ssize_t cl_read(struct cl_peer *p, const void *data, size_t len);
  * in the command tree.
  *
  *  p    - The peer for which to change mode.
+ *
  *  mode - An application-specific mode. This has no particular meaning to
  *         libcl, other than to be passed to various callbacks.
+ *
  */
 void cl_set_mode(struct cl_peer *p, int mode);
 
@@ -230,6 +295,7 @@ void cl_set_mode(struct cl_peer *p, int mode);
  * cl_command callback function.
  *
  *  p - The peer responsible for instantiating this call.
+ *
  */
 void cl_again(struct cl_peer *p);
 
@@ -244,7 +310,9 @@ void cl_again(struct cl_peer *p);
  * by way of a "help such-and-such" command.
  *
  *  p    - The peer responsible for instantiating this call.
+ *
  *  mode - An application-specific mode.
+ *
  */
 void cl_help(struct cl_peer *p, int mode);
 

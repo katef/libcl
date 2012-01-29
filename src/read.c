@@ -321,6 +321,8 @@ getc_main(struct cl_peer *p, struct cl_event *event)
 
 		switch (event->u.utf8[0]) {
 		case '\n':
+			cl_printf(p, "\n");
+
 			p->rctx->values->value = (char *) p->rctx->values + sizeof *p->rctx->values;
 			p->rctx->values->value[p->rctx->count] = '\0';
 

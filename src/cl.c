@@ -48,6 +48,8 @@ findchain(enum cl_io io)
 struct cl_tree *
 cl_create(size_t command_count, const struct cl_command commands[],
 	size_t field_count, const struct cl_field fields[],
+	const char *(*ttype)(struct cl_peer *p),
+	int (*motd)(struct cl_peer *p),
 	int (*printprompt)(struct cl_peer *p, int mode),
 	int (*visible)(struct cl_peer *p, int mode, int modes),
 	int (*vprintf)(struct cl_peer *p, const char *fmt, va_list ap))
@@ -65,6 +67,8 @@ cl_create(size_t command_count, const struct cl_command commands[],
 	}
 
 	new->root          = NULL;
+	new->ttype         = ttype;
+	new->motd          = motd;
 	new->printprompt   = printprompt;
 	new->visible       = visible;
 	new->vprintf       = vprintf;
@@ -95,7 +99,7 @@ cl_destroy(struct cl_tree *t)
 }
 
 struct cl_peer *
-cl_accept(struct cl_tree *t, int fd, enum cl_io io)
+cl_accept(struct cl_tree *t, enum cl_io io)
 {
 	struct cl_peer *new;
 	size_t i;
@@ -128,46 +132,51 @@ cl_accept(struct cl_tree *t, int fd, enum cl_io io)
 
 	new->tree   = t;
 	new->mode   = 0;
+	new->ttype  = NULL;
+	new->tctx   = NULL;
 	new->opaque = NULL;
-
-	/* TODO: get terminal name from I/O layer... telnet, getenv, etc */
-	new->tctx = term_create(&new->term, "xterm");
-	if (new->tctx == NULL) {
-		free(new->chctx);
-		read_destroy(new->rctx);
-		free(new);
-		return NULL;
-	}
 
 	for (i = 0; i < new->chain->n; i++) {
 		new->chctx[i].ioapi = new->chain->ioapi[i];
 		new->chctx[i].ioctx = NULL;
 	}
 
-	for (i = 0; i < new->chain->n; i++) {
-		if (new->chain->ioapi[i]->create == NULL) {
-			continue;
-		}
-
-		new->chctx[i].ioctx = new->chain->ioapi[i]->create(fd);
-		if (new->chctx[i].ioctx == NULL) {
-			cl_close(new);
-			return NULL;
-		}
-	}
-
-	if (-1 == new->tree->printprompt(new, new->mode)) {
-		cl_close(new);
-		return NULL;
-	}
-
 	return new;
+}
+
+int
+cl_ready(struct cl_peer *p)
+{
+	struct cl_chctx *tail;
+
+	assert(p != NULL);
+	assert(p->tree != NULL);
+	assert(p->chain != NULL);
+	assert(p->chctx != NULL);
+
+/* TODO: explain this properly */
+	/* here we call the first .create() only. it'll chain through (somehow) to call the others) */
+	/* TODO: this chains through from io_end to io_start. order matters as inner layers
+	 * may depend on outer layers (e.g. ecma48 depends on telnet for $TERM). note they only
+	 * chain through when they are ready, which may not happen within this .create() call.
+	 * eg. for telnet's case, on cl_read()ing in data (hopefully with TTYPE present) */
+
+	tail = &p->chctx[p->chain->n - 1];
+
+	assert(tail->ioapi != NULL);
+	assert(tail->ioapi->create != NULL);
+
+	if (-1 == tail->ioapi->create(p, tail)) {
+		return -1;
+	}
+
+	return 0;
 }
 
 void
 cl_close(struct cl_peer *p)
 {
-	size_t i;
+	struct cl_chctx *head;
 
 	assert(p != NULL);
 	assert(p->tctx != NULL);
@@ -177,11 +186,12 @@ cl_close(struct cl_peer *p)
 	term_destroy(p->tctx);
 	read_destroy(p->rctx);
 
-	for (i = 0; i < p->chain->n; i++) {
-		if (p->chain->ioapi[i]->destroy != NULL) {
-			p->chain->ioapi[i]->destroy(p->chctx[i].ioctx);
-		}
-	}
+	head = &p->chctx[0];
+
+	assert(head->ioapi != NULL);
+	assert(head->ioapi->destroy != NULL);
+
+	head->ioapi->destroy(p, head);
 
 	free(p->chctx);
 	free(p);
@@ -212,12 +222,31 @@ cl_get_field(struct cl_peer *p, int id)
 }
 
 int
+cl_vprintf(struct cl_peer *p, const char *fmt, va_list ap)
+{
+	struct cl_chctx *head;
+
+	assert(p != NULL);
+	assert(p->tctx != NULL);
+	assert(p->tree != NULL);
+	assert(fmt != NULL);
+
+	head = &p->chctx[0];
+
+	assert(head->ioapi != NULL);
+	assert(head->ioapi->vprintf != NULL);
+
+	return head->ioapi->vprintf(p, head, fmt, ap);
+}
+
+int
 cl_printf(struct cl_peer *p, const char *fmt, ...)
 {
 	va_list ap;
 	int n;
 
 	assert(p != NULL);
+	assert(p->tctx != NULL);
 	assert(p->tree != NULL);
 	assert(p->tree->vprintf != NULL);
 	assert(fmt != NULL);
@@ -227,16 +256,6 @@ cl_printf(struct cl_peer *p, const char *fmt, ...)
 	va_end(ap);
 
 	return n;
-}
-
-int
-cl_vprintf(struct cl_peer *p, const char *fmt, va_list ap)
-{
-	assert(p != NULL);
-	assert(p->tree != NULL);
-	assert(fmt != NULL);
-
-	return p->chctx->ioapi->vprintf(p, &p->chctx[0], fmt, ap);
 }
 
 ssize_t
@@ -257,6 +276,7 @@ cl_read(struct cl_peer *p, const void *data, size_t len)
 	tail = &p->chctx[p->chain->n - 1];
 
 	assert(tail->ioapi != NULL);
+	assert(tail->ioapi->read != NULL);
 
 	return tail->ioapi->read(p, tail, data, len);
 }
@@ -267,6 +287,18 @@ cl_set_mode(struct cl_peer *p, int mode)
 	assert(p != NULL);
 
 	p->mode = mode;
+}
+
+void
+cl_set_term(struct cl_peer *p, const char *term)
+{
+	assert(p != NULL);
+
+	if (term == NULL) {
+		term = "unknown";
+	}
+
+	p->ttype = term;
 }
 
 void

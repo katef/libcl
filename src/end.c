@@ -10,6 +10,43 @@
 
 #include "internal.h"
 
+static int
+end_create(struct cl_peer *p, struct cl_chctx chctx[])
+{
+	struct cl_chctx *prev;
+
+	assert(p != NULL);
+	assert(chctx != NULL);
+	assert(chctx->ioctx == NULL);
+	assert(chctx->ioapi != NULL);
+	assert(chctx->ioapi->create == end_create);
+
+	prev = chctx - 1;
+
+	assert(prev != NULL);
+	assert(prev->ioapi != NULL);
+	assert(prev->ioapi->create != NULL);
+
+	return prev->ioapi->create(p, prev);
+}
+
+static void
+end_destroy(struct cl_peer *p, struct cl_chctx chctx[])
+{
+	struct cl_chctx *next;
+
+	assert(p != NULL);
+	assert(chctx != NULL);
+	assert(chctx->ioctx == NULL);
+	assert(chctx->ioapi != NULL);
+	assert(chctx->ioapi->destroy == end_destroy);
+
+	next = chctx + 1;
+
+	(void) p;
+	(void) next;
+}
+
 static ssize_t
 end_read(struct cl_peer *p, struct cl_chctx chctx[],
 	const void *data, size_t len)
@@ -19,6 +56,7 @@ end_read(struct cl_peer *p, struct cl_chctx chctx[],
 	assert(p != NULL);
 	assert(chctx != NULL);
 	assert(chctx->ioctx == NULL);
+	assert(chctx->ioapi != NULL);
 	assert(chctx->ioapi->read == end_read);
 	assert(data != NULL);
 	assert(len > 0);
@@ -43,6 +81,7 @@ end_send(struct cl_peer *p, struct cl_chctx chctx[],
 	assert(p->tree->vprintf != NULL);
 	assert(chctx != NULL);
 	assert(chctx->ioctx == NULL);
+	assert(chctx->ioapi != NULL);
 	assert(chctx->ioapi->send == end_send);
 
 	(void) chctx;
@@ -75,6 +114,7 @@ end_vprintf(struct cl_peer *p, struct cl_chctx chctx[],
 	assert(p->tree->vprintf != NULL);
 	assert(chctx != NULL);
 	assert(chctx->ioctx == NULL);
+	assert(chctx->ioapi != NULL);
 	assert(chctx->ioapi->vprintf == end_vprintf);
 	assert(fmt != NULL);
 
@@ -95,6 +135,7 @@ end_printf(struct cl_peer *p, struct cl_chctx chctx[],
 	assert(p->tree->vprintf != NULL);
 	assert(chctx != NULL);
 	assert(chctx->ioctx == NULL);
+	assert(chctx->ioapi != NULL);
 	assert(chctx->ioapi->printf == end_printf);
 	assert(fmt != NULL);
 
@@ -105,12 +146,38 @@ end_printf(struct cl_peer *p, struct cl_chctx chctx[],
 	return n;
 }
 
+static const char *
+end_ttype(struct cl_peer *p, struct cl_chctx chctx[])
+{
+	const char *ttype;
+
+	assert(p != NULL);
+	assert(p->tree != NULL);
+	assert(chctx != NULL);
+	assert(chctx->ioapi != NULL);
+	assert(chctx->ioapi->ttype == end_ttype);
+
+	(void) chctx;
+
+	if (p->tree->ttype == NULL) {
+		return "unknown";
+	}
+
+	ttype = p->tree->ttype(p);
+	if (ttype == NULL) {
+		return "unknown";
+	}
+
+	return ttype;
+}
+
 struct io io_end = {
-	NULL,
-	NULL,
+	end_create,
+	end_destroy,
 	end_read,
 	end_send,
 	end_vprintf,
-	end_printf
+	end_printf,
+	end_ttype
 };
 

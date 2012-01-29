@@ -135,6 +135,16 @@ validate_name(struct cl_peer *peer, int id, const char *value)
 	return 1;
 }
 
+static int
+motd(struct cl_peer *peer)
+{
+	assert(peer != NULL);
+
+	cl_printf(peer, "%s\n", MOTD);
+
+	return 0;
+}
+
 static void
 cmd_motd(struct cl_peer *peer, const char *cmd, int mode, int argc, char *argv[])
 {
@@ -153,7 +163,7 @@ cmd_motd(struct cl_peer *peer, const char *cmd, int mode, int argc, char *argv[]
 		return;
 	}
 
-	cl_printf(peer, "%s\n", MOTD);
+	motd(peer);
 }
 
 static void
@@ -425,6 +435,7 @@ vpeerprintf(struct cl_peer *p, const char *fmt, va_list ap)
 	assert(peer->fd != -1);
 
 	/* XXX: va_copy is C99 */
+	/* XXX: also broken as an argument on macos/amd64 */
 	va_copy(ap1, ap);
 
 	/* XXX: vsnprintf is C99 */
@@ -473,7 +484,7 @@ main(int argc, char **argv)
 
 	tree = cl_create(sizeof commands / sizeof *commands, commands,
 		sizeof fields / sizeof *fields, fields,
-		printprompt, cl_visible, vpeerprintf);
+		NULL, motd, printprompt, cl_visible, vpeerprintf);
 	if (tree == NULL) {
 		perror("cl_create");
 		return 1;
@@ -583,7 +594,7 @@ main(int argc, char **argv)
 				FD_SET(i, &master);
 				maxfd = MAX(maxfd, i);
 
-				peer = cl_accept(tree, i, CL_TELNET);
+				peer = cl_accept(tree, CL_TELNET);
 				if (peer == NULL) {
 					perror ("cl_accept");
 					return 1;
@@ -592,17 +603,14 @@ main(int argc, char **argv)
 				new = addpeer(&peers, i, peer);
 				if (new == NULL) {
 					perror ("addpeer");
-					return 1;
+					return -1;
 				}
 
 				cl_set_opaque(peer, new);
 				cl_set_mode(peer, MODE_CONNECTED);
 
-				/* XXX: loop until everything is read? no, by contract a single
-				 * command will be consumed per cl_read() call. no, can't do that;
-				 * we might not *have* a full command. So this is pot luck... */
-				if (-1 == cl_read(peer, "show motd\n", 10)) {
-					perror("cl_read");
+				if (-1 == cl_ready(peer)) {
+					perror ("cl_ready");
 					return 1;
 				}
 			}

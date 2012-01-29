@@ -46,6 +46,9 @@ struct cl_tree {
 	size_t field_count;
 	const struct cl_field *fields;
 
+	int (*ready)(struct cl_peer *p);
+	int (*motd)(struct cl_peer *p);
+	const char *(*ttype)(struct cl_peer *p);
 	int (*printprompt)(struct cl_peer *p, int mode);
 	int (*visible)(struct cl_peer *p, int mode, int modes);
 	int (*vprintf)(struct cl_peer *p, const char *fmt, va_list ap);
@@ -71,16 +74,17 @@ struct ioctx;
 struct cl_chctx;
 
 struct io {
-	struct ioctx *(*create)(int fd);
-	void          (*destroy)(struct ioctx *p);
-	ssize_t       (*read)(struct cl_peer *p, struct cl_chctx *chctx,
-	                      const void *data, size_t len);
-	ssize_t       (*send)(struct cl_peer *p, struct cl_chctx *chctx,
-	                      enum ui_output output);
-	int           (*vprintf)(struct cl_peer *p, struct cl_chctx *chctx,
-	                         const char *fmt, va_list ap);
-	int           (*printf)(struct cl_peer *p, struct cl_chctx *chctx,
-	                         const char *fmt, ...);
+	int         (*create)(struct cl_peer *p, struct cl_chctx *chctx);
+	void        (*destroy)(struct cl_peer *p, struct cl_chctx *chctx);
+	ssize_t     (*read)(struct cl_peer *p, struct cl_chctx *chctx,
+	                    const void *data, size_t len);
+	ssize_t     (*send)(struct cl_peer *p, struct cl_chctx *chctx,
+	                    enum ui_output output);
+	int         (*vprintf)(struct cl_peer *p, struct cl_chctx *chctx,
+	                      const char *fmt, va_list ap);
+	int         (*printf)(struct cl_peer *p, struct cl_chctx *chctx,
+	                      const char *fmt, ...);
+	const char *(*ttype)(struct cl_peer *p, struct cl_chctx *chctx);
 };
 
 struct cl_chctx {
@@ -109,6 +113,7 @@ struct cl_chain;
 
 struct cl_peer {
 	struct cl_tree *tree;
+	const char *ttype;
 	int mode;
 
 	struct cl_term term;
