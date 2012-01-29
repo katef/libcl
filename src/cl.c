@@ -12,10 +12,10 @@
 
 #include "internal.h"
 
-extern struct io io_start;
-extern struct io io_ecma48;
-extern struct io io_telnet;
-extern struct io io_end;
+extern const struct io io_start;
+extern const struct io io_ecma48;
+extern const struct io io_telnet;
+extern const struct io io_end;
 
 static const struct cl_chain {
 	enum cl_io io;

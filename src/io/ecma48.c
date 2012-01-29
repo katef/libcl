@@ -12,7 +12,8 @@
 #include <string.h>
 #include <errno.h>
 
-#include "internal.h"
+#include "../internal.h"
+#include "chain.c"
 
 struct ioctx {
 	TermKey *tk;
@@ -22,8 +23,6 @@ struct ioctx {
 static int
 ecma48_create(struct cl_peer *p, struct cl_chctx chctx[])
 {
-	struct cl_chctx *prev;
-
 	assert(p != NULL);
 	assert(chctx != NULL);
 	assert(chctx->ioctx == NULL);
@@ -54,20 +53,12 @@ ecma48_create(struct cl_peer *p, struct cl_chctx chctx[])
 
 	chctx->ioctx->save = -1;
 
-	prev = chctx - 1;
-
-	assert(prev != NULL);
-	assert(prev->ioapi != NULL);
-	assert(prev->ioapi->create != NULL);
-
-	return prev->ioapi->create(p, prev);
+	return chain_create(p, chctx);
 }
 
 static void
 ecma48_destroy(struct cl_peer *p, struct cl_chctx chctx[])
 {
-	struct cl_chctx *next;
-
 	assert(p != NULL);
 	assert(chctx != NULL);
 	assert(chctx->ioapi != NULL);
@@ -81,13 +72,7 @@ ecma48_destroy(struct cl_peer *p, struct cl_chctx chctx[])
 		free(chctx->ioctx);
 	}
 
-	next = chctx + 1;
-
-	assert(next != NULL);
-	assert(next->ioapi != NULL);
-	assert(next->ioapi->destroy != NULL);
-
-	next->ioapi->destroy(p, next);
+	chain_destroy(p, chctx);
 }
 
 static ssize_t
@@ -218,7 +203,6 @@ static ssize_t
 ecma48_send(struct cl_peer *p, struct cl_chctx chctx[],
 	enum ui_output output)
 {
-	struct cl_chctx *next;
 	ssize_t n = 0;
 
 	assert(p != NULL);
@@ -229,12 +213,6 @@ ecma48_send(struct cl_peer *p, struct cl_chctx chctx[],
 	assert(chctx->ioapi->send == ecma48_send);
 	assert(chctx->ioctx != NULL);
 
-	next = chctx + 1;
-
-	assert(next != NULL);
-	assert(next->ioapi != NULL);
-	assert(next->ioapi->printf != NULL);
-
 	switch (output) {
 	case OUT_BACKSPACE_AND_DELETE:
 		assert(chctx->ioctx->save == -1);
@@ -244,11 +222,11 @@ ecma48_send(struct cl_peer *p, struct cl_chctx chctx[],
 		}
 
 		if (p->term.dch1 != NULL) {
-			n = next->ioapi->printf(p, next, "%s%s",
+			n = chain_printf(p, chctx, "%s%s",
 				p->term.cub1,
 				p->term.dch1);
 		} else {
-			n = next->ioapi->printf(p, next, "%s %s",
+			n = chain_printf(p, chctx, "%s %s",
 				p->term.cub1,
 				p->term.cub1);
 		}
@@ -263,7 +241,7 @@ ecma48_send(struct cl_peer *p, struct cl_chctx chctx[],
 			return 0;
 		}
 
-		n = next->ioapi->printf(p, next, "%s",
+		n = chain_printf(p, chctx, "%s",
 			p->term.sc);
 
 		break;
@@ -297,7 +275,6 @@ static int
 ecma48_vprintf(struct cl_peer *p, struct cl_chctx chctx[],
 	const char *fmt, va_list ap)
 {
-	struct cl_chctx *next;
 	int n;
 
 	assert(p != NULL);
@@ -308,13 +285,7 @@ ecma48_vprintf(struct cl_peer *p, struct cl_chctx chctx[],
 	assert(chctx->ioapi->vprintf == ecma48_vprintf);
 	assert(fmt != NULL);
 
-	next = chctx + 1;
-
-	assert(next != NULL);
-	assert(next->ioapi != NULL);
-	assert(next->ioapi->vprintf != NULL);
-
-	n = next->ioapi->vprintf(p, next, fmt, ap);
+	n = chain_vprintf(p, chctx, fmt, ap);
 
 	if (chctx->ioctx->save != -1) {
 		if (chctx->ioctx->save > INT_MAX - n) {
@@ -330,50 +301,13 @@ ecma48_vprintf(struct cl_peer *p, struct cl_chctx chctx[],
 	return n;
 }
 
-static int
-ecma48_printf(struct cl_peer *p, struct cl_chctx chctx[],
-	const char *fmt, ...)
-{
-	va_list ap;
-	int n;
-
-	assert(p != NULL);
-	assert(p->tree != NULL);
-	assert(p->tree->vprintf != NULL);
-	assert(chctx->ioctx != NULL);
-	assert(chctx->ioapi != NULL);
-	assert(chctx->ioapi->printf == ecma48_printf);
-	assert(fmt != NULL);
-
-	va_start(ap, fmt);
-	n = ecma48_vprintf(p, chctx, fmt, ap);
-	va_end(ap);
-
-	return n;
-}
-
-static const char *
-ecma48_ttype(struct cl_peer *p, struct cl_chctx chctx[])
-{
-	struct cl_chctx *next;
-
-	assert(p != NULL);
-
-	next = chctx + 1;
-
-	assert(next->ioapi != NULL);
-	assert(next->ioapi->ttype != NULL);
-
-	return next->ioapi->ttype(p, next);
-}
-
-struct io io_ecma48 = {
+const struct io io_ecma48 = {
 	ecma48_create,
 	ecma48_destroy,
 	ecma48_recv,
 	ecma48_send,
 	ecma48_vprintf,
-	ecma48_printf,
-	ecma48_ttype
+	chain_printf,
+	chain_ttype
 };
 

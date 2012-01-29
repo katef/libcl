@@ -9,12 +9,12 @@ SRCS+= cl.c
 SRCS+= trie.c
 SRCS+= field.c
 SRCS+= term.c
-
-SRCS+= start.c
-SRCS+= end.c
 SRCS+= read.c
-SRCS+= ecma48.c
-SRCS+= telnet.c
+
+SRCS+= io/start.c
+SRCS+= io/end.c
+SRCS+= io/ecma48.c
+SRCS+= io/telnet.c
 
 .include <lx.obj.mk>
 

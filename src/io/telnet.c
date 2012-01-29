@@ -13,7 +13,8 @@
 #include <string.h>
 #include <ctype.h>
 
-#include "internal.h"
+#include "../internal.h"
+#include "chain.c"
 
 struct ioctx {
 	struct cl_peer *p;
@@ -24,21 +25,13 @@ struct ioctx {
 static void
 ready(struct cl_chctx *chctx)
 {
-	struct cl_chctx *prev;
-
 	assert(chctx != NULL);
 	assert(chctx->ioctx != NULL);
 	assert(chctx->ioctx->p != NULL);
 	assert(chctx->ioctx->p->ttype != NULL);
 
-	prev = chctx - 1;
-
-	assert(prev != NULL);
-	assert(prev->ioapi != NULL);
-	assert(prev->ioapi->create != NULL);
-
 	/* TODO: handle error */
-	prev->ioapi->create(chctx->ioctx->p, prev);
+	chain_create(chctx->ioctx->p, chctx);
 }
 
 static void
@@ -219,8 +212,6 @@ telnet_newenviron_value(ioctx->tt,
 static void
 cltelnet_destroy(struct cl_peer *p, struct cl_chctx chctx[])
 {
-	struct cl_chctx *next;
-
 	assert(p != NULL);
 	assert(chctx != NULL);
 	assert(chctx->ioapi != NULL);
@@ -234,13 +225,7 @@ cltelnet_destroy(struct cl_peer *p, struct cl_chctx chctx[])
 		free(chctx->ioctx);
 	}
 
-	next = chctx + 1;
-
-	assert(next != NULL);
-	assert(next->ioapi != NULL);
-	assert(next->ioapi->destroy != NULL);
-
-	next->ioapi->destroy(p, next);
+	chain_destroy(p, chctx);
 }
 
 static ssize_t
@@ -319,50 +304,13 @@ cltelnet_vprintf(struct cl_peer *p, struct cl_chctx chctx[],
 	return telnet_vprintf(chctx->ioctx->tt, fmt, ap);
 }
 
-static int
-cltelnet_printf(struct cl_peer *p, struct cl_chctx chctx[],
-	const char *fmt, ...)
-{
-	va_list ap;
-	int n;
-
-	assert(p != NULL);
-	assert(p->tree != NULL);
-	assert(p->tree->vprintf != NULL);
-	assert(chctx->ioctx != NULL);
-	assert(chctx->ioapi != NULL);
-	assert(chctx->ioapi->printf == cltelnet_printf);
-	assert(fmt != NULL);
-
-	va_start(ap, fmt);
-	n = cltelnet_vprintf(p, chctx, fmt, ap);
-	va_end(ap);
-
-	return n;
-}
-
-static const char *
-cltelnet_ttype(struct cl_peer *p, struct cl_chctx chctx[])
-{
-	struct cl_chctx *next;
-
-	assert(p != NULL);
-
-	next = chctx + 1;
-
-	assert(next->ioapi != NULL);
-	assert(next->ioapi->ttype != NULL);
-
-	return next->ioapi->ttype(p, next);
-}
-
-struct io io_telnet = {
+const struct io io_telnet = {
 	cltelnet_create,
 	cltelnet_destroy,
 	cltelnet_read,
 	cltelnet_send,
 	cltelnet_vprintf,
-	cltelnet_printf,
-	cltelnet_ttype
+	chain_printf,
+	chain_ttype
 };
 
