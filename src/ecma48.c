@@ -25,7 +25,6 @@ ecma48_create(struct cl_peer *p, struct cl_chctx chctx[])
 	struct cl_chctx *prev;
 
 	assert(p != NULL);
-	assert(strlen(p->ttype) > 0);
 	assert(chctx != NULL);
 	assert(chctx->ioctx == NULL);
 	assert(chctx->ioapi != NULL);
@@ -43,6 +42,7 @@ ecma48_create(struct cl_peer *p, struct cl_chctx chctx[])
 	}
 
 	assert(p->ttype != NULL);
+	assert(strlen(p->ttype) > 0);
 
 	/* TODO: TERMKEY_FLAG_UTF8? CTRLC? */
 	chctx->ioctx->tk = termkey_new_abstract(p->ttype, 0);

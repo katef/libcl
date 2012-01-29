@@ -290,18 +290,6 @@ cl_set_mode(struct cl_peer *p, int mode)
 }
 
 void
-cl_set_term(struct cl_peer *p, const char *term)
-{
-	assert(p != NULL);
-
-	if (term == NULL) {
-		term = "unknown";
-	}
-
-	p->ttype = term;
-}
-
-void
 cl_again(struct cl_peer *p)
 {
 }
