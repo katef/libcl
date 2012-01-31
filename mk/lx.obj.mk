@@ -10,7 +10,7 @@ OBJS?=	${SRCS:C/.c$/.o/}
 
 .for src in ${SRCS:M*.c}
 ${OBJ_SDIR}/${src:C/.c$/.o/}: ${src}
-	@${MKDIR} "${OBJ_SDIR}"
+	@${MKDIR} "${.TARGET:H}"
 	${CC} ${CFLAGS} -c ${.ALLSRC} -o ${.TARGET}
 .endfor
 
