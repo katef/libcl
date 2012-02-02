@@ -126,6 +126,21 @@ struct cl_peer {
 	void *opaque;
 };
 
+enum lex_type {
+	TOK_ERROR,
+	TOK_WORD,
+	TOK_STRING,
+	TOK_PIPE
+};
+
+struct lex_tok {
+	enum lex_type type;
+	struct {
+		const char *start;
+		const char *end;
+	} src, dst;
+};
+
 struct trie *
 trie_add(struct trie **trie, const char *s, const struct cl_command *command);
 
@@ -139,6 +154,9 @@ int getc_main(struct cl_peer *p, struct cl_event *event);
 
 struct termctx *term_create(struct cl_term *term, const char *name);
 void term_destroy(struct termctx *t);
+
+struct lex_tok *
+lex_next(struct lex_tok *new, const char **src, char **dst);
 
 #endif
 

@@ -70,6 +70,36 @@ append(void *base, size_t basesz, size_t *count, const char *s)
 	return base;
 }
 
+static int
+parsecommand(struct cl_peer *p, const char *src, char *dst)
+{
+	struct lex_tok tok;
+
+	assert(p != NULL);
+	assert(src != NULL);
+	assert(dst != NULL);
+
+	p->rctx->t = p->tree->root;
+
+	while (lex_next(&tok, &src, &dst) != NULL) {
+		if (tok.type == TOK_ERROR) {
+			/* TODO: be more helpful */
+			cl_printf(p, "syntax error at: %.*s\n",
+				(int) (tok.src.end - tok.src.start), tok.src.start);
+
+			return 0;
+		}
+
+		/* TODO: lex into array, and probably realloc it in this loop.
+		 * ultimiately we'll need to store these tokens for argv anyway...
+		 * but only for the duration of a command! so actually maybe just
+		 * store those; will need to be able to \0-terminate them
+		 */
+	}
+
+	return 1;
+}
+
 static void
 fieldprompt(struct cl_peer *p)
 {
@@ -213,48 +243,89 @@ getc_main(struct cl_peer *p, struct cl_event *event)
 		case '\n':
 			cl_printf(p, "\n");
 
+			/*
+			 * Memory is layed out here such that the command is stored
+			 * verbatim as input by the user, followed directly by a second
+			 * copy containing just the lexeme contents, each null terminated.
+			 *
+			 * These have escape sequences expanded, string quotes skipped and
+			 * inter-token whitespace omitted. For example (in C's notation):
+			 *
+			 *  src = " abc \t  def 'xyz' \"x\\t\\n\""
+			 *  dst = "abc\0def\0xyz\0x\t\n"
+			 *
+			 * gives the four tokens "abc", "def", "xyz" and "x\t\n".
+			 *
+			 * The worst case for memory use here is a sequence of pipes, where
+			 * every character requires termination. So the worst case memory
+			 * for dst is twice src, plus one for the single terminator for src.
+			 */
 			{
-				unsigned char *u;
+				struct readctx *tmp;
+				char *s;
+				int r;
 
-				u = (unsigned char *) p->rctx + sizeof *p->rctx;
+				tmp = realloc(p->rctx, sizeof *p->rctx + p->rctx->count * 3 + 1);
+				if (tmp == NULL) {
+					return -1;
+				}
 
-				u[p->rctx->count] = '\0';
+				p->rctx = tmp;
 
-				for (p->rctx->t = p->tree->root; *u != '\0'; u++) {
-					/* TODO: skip excess whitespace here */
+				s = (char *) p->rctx + sizeof *p->rctx;
 
-					p->rctx->t = p->rctx->t->edge[*u];
-					if (p->rctx->t == NULL) {
-						cl_printf(p, "command not found\n");
+				s[p->rctx->count] = '\0';
 
-						p->tree->printprompt(p, p->mode);
+				assert(strchr(s, '\r') == NULL);
+				assert(strchr(s, '\n') == NULL);
 
-						p->rctx->state = STATE_NEW;
-						return 0;
-					}
+				r = parsecommand(p, s, s + p->rctx->count + 1);
+
+				p->rctx->count = 0;
+
+				if (r == -1) {
+					return -1;
+				}
+
+				if (r == 0) {
+					p->tree->printprompt(p, p->mode);
+
+					p->rctx->state = STATE_NEW;
+					return 0;
 				}
 			}
 
-			if (p->rctx->t == p->tree->root) {
-				p->tree->printprompt(p, p->mode);
+			{
+				if (p->rctx->t == p->tree->root) {
+					p->tree->printprompt(p, p->mode);
 
-				return 0;
-			}
+					return 0;
+				}
 
-			if (p->rctx->t->command == NULL) {
-				cl_printf(p, "command not found\n");
+				if (p->rctx->t == NULL) {
+					cl_printf(p, "command not found\n");
 
-				p->rctx->state = STATE_NEW;
-				return 0;
-			}
+					p->tree->printprompt(p, p->mode);
 
-			if (!p->tree->visible(p, p->mode, p->rctx->t->command->modes)) {
-				cl_printf(p, "command not found\n");
+					p->rctx->state = STATE_NEW;
+					return 0;
+				}
 
-				p->tree->printprompt(p, p->mode);
+				if (p->rctx->t->command == NULL) {
+					cl_printf(p, "command not found\n");
 
-				p->rctx->state = STATE_NEW;
-				return 0;
+					p->rctx->state = STATE_NEW;
+					return 0;
+				}
+
+				if (!p->tree->visible(p, p->mode, p->rctx->t->command->modes)) {
+					cl_printf(p, "command not found\n");
+
+					p->tree->printprompt(p, p->mode);
+
+					p->rctx->state = STATE_NEW;
+					return 0;
+				}
 			}
 
 			/* TODO: store argv, argc here */
