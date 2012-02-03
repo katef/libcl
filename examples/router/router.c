@@ -146,7 +146,7 @@ motd(struct cl_peer *peer)
 }
 
 static void
-cmd_motd(struct cl_peer *peer, const char *cmd, int mode, int argc, char *argv[])
+cmd_motd(struct cl_peer *peer, const char *cmd, int mode, int argc, const char *argv[])
 {
 	assert(peer != NULL);
 	assert(cmd != NULL);
@@ -167,7 +167,7 @@ cmd_motd(struct cl_peer *peer, const char *cmd, int mode, int argc, char *argv[]
 }
 
 static void
-cmd_login(struct cl_peer *peer, const char *cmd, int mode, int argc, char *argv[])
+cmd_login(struct cl_peer *peer, const char *cmd, int mode, int argc, const char *argv[])
 {
 	const char *user;
 	const char *pass;
@@ -213,7 +213,7 @@ cmd_login(struct cl_peer *peer, const char *cmd, int mode, int argc, char *argv[
 }
 
 static void
-cmd_enable(struct cl_peer *peer, const char *cmd, int mode, int argc, char *argv[])
+cmd_enable(struct cl_peer *peer, const char *cmd, int mode, int argc, const char *argv[])
 {
 	const char *pass;
 	static int attempts;
@@ -254,7 +254,7 @@ cmd_enable(struct cl_peer *peer, const char *cmd, int mode, int argc, char *argv
 }
 
 static void
-cmd_config_term(struct cl_peer *peer, const char *cmd, int mode, int argc, char *argv[])
+cmd_config_term(struct cl_peer *peer, const char *cmd, int mode, int argc, const char *argv[])
 {
 	assert(peer != NULL);
 	assert(cmd != NULL);
@@ -276,7 +276,7 @@ cmd_config_term(struct cl_peer *peer, const char *cmd, int mode, int argc, char 
 
 /* argv[] are arguments after the "enable" command: "enable x y z". nothing to do with fields */
 static void
-cmd_config(struct cl_peer *peer, const char *cmd, int mode, int argc, char *argv[])
+cmd_config(struct cl_peer *peer, const char *cmd, int mode, int argc, const char *argv[])
 {
 	assert(peer != NULL);
 	assert(cmd != NULL);
@@ -312,7 +312,7 @@ cmd_config(struct cl_peer *peer, const char *cmd, int mode, int argc, char *argv
 }
 
 static void
-cmd_exit(struct cl_peer *peer, const char *cmd, int mode, int argc, char *argv[])
+cmd_exit(struct cl_peer *peer, const char *cmd, int mode, int argc, const char *argv[])
 {
 	assert(peer != NULL);
 	assert(cmd != NULL);
@@ -341,7 +341,7 @@ cmd_exit(struct cl_peer *peer, const char *cmd, int mode, int argc, char *argv[]
 }
 
 static void
-cmd_help(struct cl_peer *peer, const char *cmd, int mode, int argc, char *argv[])
+cmd_help(struct cl_peer *peer, const char *cmd, int mode, int argc, const char *argv[])
 {
 	assert(peer != NULL);
 	assert(cmd != NULL);

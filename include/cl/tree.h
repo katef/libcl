@@ -114,7 +114,7 @@ struct cl_command {
 	 *
  	 */
 	void (*callback)(struct cl_peer *p, const char *command, int mode,
-		int argc, char *argv[]);
+		int argc, const char *argv[]);
 
 	const char *usage;
 };

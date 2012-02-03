@@ -98,7 +98,7 @@ struct trie_command {
 	int fields;
 
 	void (*callback)(struct cl_peer *p, const char *command, int mode,
-		int argc, char *argv[]);
+		int argc, const char *argv[]);
 };
 
 struct trie {

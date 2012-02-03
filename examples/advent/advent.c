@@ -17,7 +17,7 @@ enum {
 };
 
 static void
-cmd_look(struct cl_peer *peer, const char *cmd, int mode, int argc, char *argv[])
+cmd_look(struct cl_peer *peer, const char *cmd, int mode, int argc, const char *argv[])
 {
 	assert(peer != NULL);
 	assert(cmd != NULL);
@@ -36,7 +36,7 @@ cmd_look(struct cl_peer *peer, const char *cmd, int mode, int argc, char *argv[]
 }
 
 static void
-cmd_go(struct cl_peer *peer, const char *cmd, int mode, int argc, char *argv[])
+cmd_go(struct cl_peer *peer, const char *cmd, int mode, int argc, const char *argv[])
 {
 	assert(peer != NULL);
 	assert(cmd != NULL);
@@ -55,7 +55,7 @@ cmd_go(struct cl_peer *peer, const char *cmd, int mode, int argc, char *argv[])
 }
 
 static void
-cmd_quit(struct cl_peer *peer, const char *cmd, int mode, int argc, char *argv[])
+cmd_quit(struct cl_peer *peer, const char *cmd, int mode, int argc, const char *argv[])
 {
 	assert(peer != NULL);
 	assert(cmd != NULL);
@@ -74,7 +74,7 @@ cmd_quit(struct cl_peer *peer, const char *cmd, int mode, int argc, char *argv[]
 }
 
 static void
-cmd_help(struct cl_peer *peer, const char *cmd, int mode, int argc, char *argv[])
+cmd_help(struct cl_peer *peer, const char *cmd, int mode, int argc, const char *argv[])
 {
 	assert(peer != NULL);
 	assert(cmd != NULL);
