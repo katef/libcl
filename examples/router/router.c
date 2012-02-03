@@ -65,6 +65,7 @@ enum {
 struct peer {
 	int fd;
 	struct cl_peer *peer;
+	char item[32];
 
 	struct peer *next;
 };
@@ -110,25 +111,26 @@ findpeer(struct peer *peers, int fd)
 }
 
 static int
-validate_name(struct cl_peer *peer, int id, const char *value)
+validate_name(struct cl_peer *p, int id, const char *value)
 {
 	const char *valid= "ABCDEFGHIJKLMNOPQRSTUVWXYZ" \
 	                   "abcdefghijklmnopqrstuvwxyz" \
 	                   "0123456789" "_";
 
+	assert(p != NULL);
 	assert(id == FIELD_USERNAME);
-	assert(peer != NULL);
+	assert(value != NULL);
 
 	(void) id;
 
 	if (strlen(value) == 0) {
-		cl_printf(peer, "a name may not be empty\n");
+		cl_printf(p, "a name may not be empty\n");
 		return 0;
 	}
 
 	/* or a regexp... /[0-9a-zA-Z_]+/ */
-	if (value[strcspn(value, valid)] != '\0') {
-		cl_printf(peer, "a name may only contain [0-9a-zA-Z_]\n");
+	if (value[strspn(value, valid)] != '\0') {
+		cl_printf(p, "a name may only contain [0-9a-zA-Z_]\n");
 		return 0;
 	}
 
@@ -136,66 +138,70 @@ validate_name(struct cl_peer *peer, int id, const char *value)
 }
 
 static int
-motd(struct cl_peer *peer)
+motd(struct cl_peer *p)
 {
-	assert(peer != NULL);
+	assert(p != NULL);
 
-	cl_printf(peer, "%s\n", MOTD);
+	cl_printf(p, "%s\n", MOTD);
 
 	return 0;
 }
 
 static void
-cmd_motd(struct cl_peer *peer, const char *cmd, int mode, int argc, const char *argv[])
+cmd_motd(struct cl_peer *p, const char *cmd, int mode, int argc, const char *argv[])
 {
-	assert(peer != NULL);
+	assert(p != NULL);
 	assert(cmd != NULL);
 	assert(0 == strcmp(cmd, "show motd"));
 	assert(mode == MODE_CONNECTED);
 	assert(argc >= 0);
+	assert(argv != NULL);
+	assert(argv[argc] == NULL);
 
 	(void) cmd;
 	(void) mode;
 	(void) argv;
 
 	if (argc != 0) {
-		cl_printf(peer, "invalid cardinality");
+		cl_printf(p, "invalid cardinality\n");
 		return;
 	}
 
-	motd(peer);
+	motd(p);
 }
 
 static void
-cmd_login(struct cl_peer *peer, const char *cmd, int mode, int argc, const char *argv[])
+cmd_login(struct cl_peer *p, const char *cmd, int mode, int argc, const char *argv[])
 {
 	const char *user;
 	const char *pass;
 	static int attempts;
 
-	assert(peer != NULL);
+	assert(p != NULL);
 	assert(cmd != NULL);
 	assert(0 == strcmp(cmd, "login"));
 	assert(mode == MODE_CONNECTED);
 	assert(argc >= 0);
+	assert(argv != NULL);
+	assert(argv[argc] == NULL);
 
 	(void) cmd;
 	(void) mode;
 	(void) argv;
 
 	if (argc != 0) {
-		cl_printf(peer, "invalid cardinality");
+		cl_printf(p, "invalid cardinality\n");
 		return;
 	}
 
-	user = cl_get_field(peer, FIELD_USERNAME);
-	pass = cl_get_field(peer, FIELD_PASSWORD);
+	user = cl_get_field(p, FIELD_USERNAME);
+	pass = cl_get_field(p, FIELD_PASSWORD);
 
 	assert(user != NULL);
 	assert(pass != NULL);
 
 	if (0 == strcmp(user, USERNAME) && 0 == strcmp(pass, PASSWORD)) {
-		cl_set_mode(peer, MODE_DISABLED);
+		cl_set_mode(p, MODE_DISABLED);
 		attempts = 0;
 		return;
 	}
@@ -203,180 +209,205 @@ cmd_login(struct cl_peer *peer, const char *cmd, int mode, int argc, const char 
 	printf("invalid login for %s\n", user);
 
 	if (attempts > 3) {
-		cl_printf(peer, "invalid password");
+		cl_printf(p, "invalid password\n");
 		attempts = 0;
 		return;
 	}
 
 	attempts++;
-	cl_again(peer);
+	cl_again(p);
 }
 
 static void
-cmd_enable(struct cl_peer *peer, const char *cmd, int mode, int argc, const char *argv[])
+cmd_enable(struct cl_peer *p, const char *cmd, int mode, int argc, const char *argv[])
 {
 	const char *pass;
 	static int attempts;
 
-	assert(peer != NULL);
+	assert(p != NULL);
 	assert(cmd != NULL);
 	assert(0 == strcmp(cmd, "enable"));
 	assert(mode == MODE_DISABLED);
 	assert(argc >= 0);
+	assert(argv != NULL);
+	assert(argv[argc] == NULL);
 
 	(void) cmd;
 	(void) mode;
 	(void) argv;
 
 	if (argc != 0) {
-		cl_printf(peer, "invalid cardinality");
+		cl_printf(p, "invalid cardinality\n");
 		return;
 	}
 
-	pass = cl_get_field(peer, FIELD_PASSWORD);
+	pass = cl_get_field(p, FIELD_PASSWORD);
 
 	assert(pass != NULL);
 
 	if (0 == strcmp(pass, PASSWORD)) {
-		cl_set_mode(peer, MODE_ENABLED);
+		cl_set_mode(p, MODE_ENABLED);
 		attempts = 0;
 		return;
 	}
 
 	if (attempts > 3) {
-		cl_printf(peer, "invalid password");
+		cl_printf(p, "invalid password\n");
 		attempts = 0;
 		return;
 	}
 
 	attempts++;
-	cl_again(peer);
+	cl_again(p);
 }
 
 static void
-cmd_config_term(struct cl_peer *peer, const char *cmd, int mode, int argc, const char *argv[])
+cmd_config_term(struct cl_peer *p, const char *cmd, int mode, int argc, const char *argv[])
 {
-	assert(peer != NULL);
+	assert(p != NULL);
 	assert(cmd != NULL);
 	assert(0 == strcmp(cmd, "configure terminal"));
 	assert(mode == MODE_ENABLED);
 	assert(argc >= 0);
+	assert(argv != NULL);
+	assert(argv[argc] == NULL);
 
 	(void) cmd;
 	(void) mode;
 	(void) argv;
 
 	if (argc != 0) {
-		cl_printf(peer, "invalid cardinality");
+		cl_printf(p, "invalid cardinality\n");
 		return;
 	}
 
-	cl_set_mode(peer, MODE_CONFIGURE);
+	cl_set_mode(p, MODE_CONFIGURE);
 }
 
 /* argv[] are arguments after the "enable" command: "enable x y z". nothing to do with fields */
 static void
-cmd_config(struct cl_peer *peer, const char *cmd, int mode, int argc, const char *argv[])
+cmd_config(struct cl_peer *p, const char *cmd, int mode, int argc, const char *argv[])
 {
-	assert(peer != NULL);
+	assert(p != NULL);
 	assert(cmd != NULL);
 	assert(0 == strcmp(cmd, "interface")
 	    || 0 == strcmp(cmd, "effect")
 	    || 0 == strcmp(cmd, "link"));
 	assert(mode == MODE_CONFIGURE);
 	assert(argc >= 0);
+	assert(argv != NULL);
+	assert(argv[argc] == NULL);
 
 	(void) cmd;
 	(void) mode;
 
 	if (argc != 1) {
-		cl_printf(peer, "invalid cardinality");
-		/* or you could: cl_help(peer, mode) */
+		cl_printf(p, "invalid cardinality\n");
+		/* or you could: cl_help(p, mode) */
 		return;
 	}
 
 	assert(strlen(argv[0]) != 0);	/* because libcl doesn't permit "" here */
 
 	/* TODO: hacky to pass FIELD_USERNAME here */
-	if (!validate_name(peer, FIELD_USERNAME, argv[0])) {
+	if (!validate_name(p, FIELD_USERNAME, argv[0])) {
 		return;
 	}
 
-	/* TODO: do something with argv[0] */
+	{
+		struct peer *peer;
+
+		peer = cl_get_opaque(p);
+
+		assert(peer != NULL);
+		assert(argv[0] != NULL);
+		assert(strlen(argv[0]) > 0);
+
+		snprintf(peer->item, sizeof peer->item, "%s", argv[0]);
+	}
 
 	switch (cmd[0]) {
-	case 'i': cl_set_mode(peer, MODE_INTERFACE); break;
-	case 'e': cl_set_mode(peer, MODE_EFFECT);    break;
-	case 'l': cl_set_mode(peer, MODE_LINK);      break;
+	case 'i': cl_set_mode(p, MODE_INTERFACE); break;
+	case 'e': cl_set_mode(p, MODE_EFFECT);    break;
+	case 'l': cl_set_mode(p, MODE_LINK);      break;
 	}
 }
 
 static void
-cmd_exit(struct cl_peer *peer, const char *cmd, int mode, int argc, const char *argv[])
+cmd_exit(struct cl_peer *p, const char *cmd, int mode, int argc, const char *argv[])
 {
-	assert(peer != NULL);
+	assert(p != NULL);
 	assert(cmd != NULL);
 	assert(0 == strcmp(cmd, "exit"));
 	assert(argc >= 0);
+	assert(argv != NULL);
+	assert(argv[argc] == NULL);
 
 	(void) cmd;
 	(void) argv;
 
 	if (argc != 0) {
-		cl_printf(peer, "invalid cardinality");
+		cl_printf(p, "invalid cardinality\n");
 		return;
 	}
 
 	/* XXX: i dislike this; we have mode knowledge scattered all over the place,
 	 * where it clearly could be automated into a tree */
 	switch (mode) {
-	case MODE_INTERFACE: cl_set_mode(peer, MODE_CONFIGURE); break;
-	case MODE_EFFECT:    cl_set_mode(peer, MODE_CONFIGURE); break;
-	case MODE_LINK:      cl_set_mode(peer, MODE_CONFIGURE); break;
-	case MODE_CONFIGURE: cl_set_mode(peer, MODE_ENABLED);   break;
-	case MODE_ENABLED:   cl_set_mode(peer, MODE_DISABLED);  break;
-	case MODE_DISABLED:  cl_set_mode(peer, MODE_CONNECTED); break;
-	case MODE_CONNECTED: cl_close(peer);                    break;
+	case MODE_INTERFACE: cl_set_mode(p, MODE_CONFIGURE); break;
+	case MODE_EFFECT:    cl_set_mode(p, MODE_CONFIGURE); break;
+	case MODE_LINK:      cl_set_mode(p, MODE_CONFIGURE); break;
+	case MODE_CONFIGURE: cl_set_mode(p, MODE_ENABLED);   break;
+	case MODE_ENABLED:   cl_set_mode(p, MODE_DISABLED);  break;
+	case MODE_DISABLED:  cl_set_mode(p, MODE_CONNECTED); break;
+	case MODE_CONNECTED: cl_close(p);                    break;
 	}
 }
 
 static void
-cmd_help(struct cl_peer *peer, const char *cmd, int mode, int argc, const char *argv[])
+cmd_help(struct cl_peer *p, const char *cmd, int mode, int argc, const char *argv[])
 {
-	assert(peer != NULL);
+	assert(p != NULL);
 	assert(cmd != NULL);
 	assert(0 == strcmp(cmd, "help"));
 	assert(argc >= 0);
+	assert(argv != NULL);
+	assert(argv[argc] == NULL);
 
 	(void) cmd;
 	(void) argv;
 
 	if (argc != 0) {
-		cl_printf(peer, "invalid cardinality");
+		cl_printf(p, "invalid cardinality\n");
 		return;
 	}
 
-	/* TODO: switch on optional argv[0], for "help config" calls cl_help(peer, MODE_CONFIGURE) */
+	/* TODO: switch on optional argv[0], for "help config" calls cl_help(p, MODE_CONFIGURE) */
 
-	cl_help(peer, mode);
+	cl_help(p, mode);
 }
 
 static int
-printprompt(struct cl_peer *peer, int mode)
+printprompt(struct cl_peer *p, int mode)
 {
-	const char *something = "TODO";	/* TODO: from model of efcli data */
+	struct peer *peer;
+
+	assert(p != NULL);
+
+	peer = cl_get_opaque(p);
 
 	assert(peer != NULL);
+
 /* TODO: assert(single bit in mode); */
 
 	switch (mode) {
-	case MODE_CONNECTED: return cl_printf(peer, "> ");	/* XXX: not for pre-motd. make a MODE_MOTD? */
-	case MODE_DISABLED:  return cl_printf(peer, "> ");
-	case MODE_ENABLED:   return cl_printf(peer, "# ");
-	case MODE_CONFIGURE: return cl_printf(peer, "config# ");
-	case MODE_INTERFACE: return cl_printf(peer, "config(%s)# ", something);
-	case MODE_LINK:      return cl_printf(peer, "config(%s)# ", something);
-	case MODE_EFFECT:    return cl_printf(peer, "config(%s)# ", something);
+	case MODE_CONNECTED: return cl_printf(p, "> ");	/* XXX: not for pre-motd. make a MODE_MOTD? */
+	case MODE_DISABLED:  return cl_printf(p, "> ");
+	case MODE_ENABLED:   return cl_printf(p, "# ");
+	case MODE_CONFIGURE: return cl_printf(p, "config# ");
+	case MODE_INTERFACE: return cl_printf(p, "config(%s)# ", peer->item);
+	case MODE_LINK:      return cl_printf(p, "config(%s)# ", peer->item);
+	case MODE_EFFECT:    return cl_printf(p, "config(%s)# ", peer->item);
 	}
 
 	/* UNREACHED */
