@@ -29,6 +29,8 @@ struct readctx {
 	int fields;
 	struct value *values;
 	size_t count;
+	int argc;
+	const char **argv;
 };
 
 static void *
@@ -82,19 +84,105 @@ parsecommand(struct cl_peer *p, const char *src, char *dst)
 	p->rctx->t = p->tree->root;
 
 	while (lex_next(&tok, &src, &dst) != NULL) {
-		if (tok.type == TOK_ERROR) {
-			/* TODO: be more helpful */
+		const struct trie *t;
+
+		switch (tok.type) {
+		case TOK_ERROR:
+		case TOK_PIPE:	/* not implemented */
 			cl_printf(p, "syntax error at: %.*s\n",
 				(int) (tok.src.end - tok.src.start), tok.src.start);
 
 			return 0;
+
+		case TOK_WORD:
+			break;
+
+		default:
+			cl_printf(p, "command not found\n");
+
+			return 0;
 		}
 
-		/* TODO: lex into array, and probably realloc it in this loop.
-		 * ultimiately we'll need to store these tokens for argv anyway...
-		 * but only for the duration of a command! so actually maybe just
-		 * store those; will need to be able to \0-terminate them
-		 */
+		t = trie_walk(p->rctx->t, tok.dst.start, tok.dst.end - tok.dst.start);
+		if (t == NULL) {
+			cl_printf(p, "command not found\n");
+
+			return 0;
+		}
+
+		p->rctx->t = t;
+
+		t = trie_walk(p->rctx->t, " ", 1);
+		if (t == NULL) {
+			break;
+		}
+
+		p->rctx->t = t;
+	}
+
+	{
+		if (p->rctx->t == p->tree->root) {
+			return 0;
+		}
+
+		if (p->rctx->t == NULL) {
+			cl_printf(p, "command not found\n");
+
+			return 0;
+		}
+
+		if (p->rctx->t->command == NULL) {
+			return 0;
+		}
+
+		if (!p->tree->visible(p, p->mode, p->rctx->t->command->modes)) {
+			cl_printf(p, "command not found\n");
+
+			return 0;
+		}
+	}
+
+	p->rctx->argc = 0;
+	p->rctx->argv = NULL;
+
+	while (lex_next(&tok, &src, &dst) != NULL) {
+		switch (tok.type) {
+		case TOK_ERROR:
+		case TOK_PIPE:	/* not implemented */
+			cl_printf(p, "syntax error at: %.*s\n",
+				(int) (tok.src.end - tok.src.start), tok.src.start);
+
+		case TOK_WORD:
+		case TOK_STRING:
+			break;
+		}
+
+		if (p->rctx->argc == INT_MAX) {
+			free(p->rctx->argv);
+			errno = ENOMEM;
+			return -1;
+		}
+
+		if (p->rctx->argc % 8 == 0) {
+			const char **tmp;
+
+			tmp = realloc(p->rctx->argv, sizeof *p->rctx->argv * (p->rctx->argc + 8 + 1));
+			if (tmp == NULL) {
+				free(p->rctx->argv);
+				return -1;
+			}
+
+			p->rctx->argv = tmp;
+		}
+
+		p->rctx->argv[p->rctx->argc++] = tok.dst.start;
+	}
+
+	if (p->rctx->argc == 0) {
+		static const char *argv[] = { NULL };
+		p->rctx->argv = argv;
+	} else {
+		p->rctx->argv[p->rctx->argc] = NULL;
 	}
 
 	return 1;
@@ -281,9 +369,10 @@ getc_main(struct cl_peer *p, struct cl_event *event)
 
 				r = parsecommand(p, s, s + p->rctx->count + 1);
 
-				p->rctx->count = 0;
+				p->rctx->count = 0;	/* XXX: not sure why i need to do this here... */
 
 				if (r == -1) {
+					/* TODO: free argv etc */
 					return -1;
 				}
 
@@ -294,41 +383,6 @@ getc_main(struct cl_peer *p, struct cl_event *event)
 					return 0;
 				}
 			}
-
-			{
-				if (p->rctx->t == p->tree->root) {
-					p->tree->printprompt(p, p->mode);
-
-					return 0;
-				}
-
-				if (p->rctx->t == NULL) {
-					cl_printf(p, "command not found\n");
-
-					p->tree->printprompt(p, p->mode);
-
-					p->rctx->state = STATE_NEW;
-					return 0;
-				}
-
-				if (p->rctx->t->command == NULL) {
-					cl_printf(p, "command not found\n");
-
-					p->rctx->state = STATE_NEW;
-					return 0;
-				}
-
-				if (!p->tree->visible(p, p->mode, p->rctx->t->command->modes)) {
-					cl_printf(p, "command not found\n");
-
-					p->tree->printprompt(p, p->mode);
-
-					p->rctx->state = STATE_NEW;
-					return 0;
-				}
-			}
-
-			/* TODO: store argv, argc here */
 
 			p->rctx->fields = p->rctx->t->command->fields;
 			p->rctx->state  = STATE_FIELD;
@@ -402,9 +456,11 @@ getc_main(struct cl_peer *p, struct cl_event *event)
 firstfield:
 
 			if (p->rctx->fields == 0) {
-				p->rctx->t->command->callback(p, p->rctx->t->command->command, p->mode, 0, NULL);
+				p->rctx->t->command->callback(p, p->rctx->t->command->command,
+					p->mode, p->rctx->argc, p->rctx->argv);
 
 				/* TODO: free .values list */
+				/* TODO: free argv etc */
 
 				p->tree->printprompt(p, p->mode);
 
@@ -418,6 +474,7 @@ firstfield:
 				new = malloc(sizeof *new + 1);
 				if (new == NULL) {
 					/* TODO: free .values list */
+					/* TODO: free argv etc */
 					return -1;
 				}
 
@@ -446,6 +503,7 @@ firstfield:
 					&p->rctx->count, event->u.utf8);
 				if (tmp == NULL) {
 					/* TODO: free .values list */
+					/* TODO: free argv etc */
 					return -1;
 				}
 
