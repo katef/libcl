@@ -9,6 +9,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <limits.h>
 
 #include "internal.h"
 
@@ -57,6 +58,7 @@ cl_create(size_t command_count, const struct cl_command commands[],
 	size_t i;
 	struct cl_tree *new;
 
+	/* TODO: assert(command_count < SIZE_MAX); */
 	assert((command_count == 0) == (commands == NULL));
 	assert((field_count   == 0) == (fields   == NULL));
 	assert(printprompt != NULL);
@@ -297,22 +299,10 @@ cl_again(struct cl_peer *p)
 void
 cl_help(struct cl_peer *p, int mode)
 {
-	size_t i;
-
 	assert(p != NULL);
 	assert(p->tree != NULL);
 
-	for (i = 0; i < p->tree->command_count; i++) {
-		if (!p->tree->visible(p, mode, p->tree->commands[i].modes)) {
-			continue;
-		}
-
-		if (p->tree->commands[i].usage == NULL) {
-			cl_printf(p, "  %-20s\n", p->tree->commands[i].command);
-		} else {
-			cl_printf(p, "  %-20s - %s\n", p->tree->commands[i].command, p->tree->commands[i].usage);
-		}
-	}
+	trie_help(p, p->tree->root, mode);
 }
 
 /* You don't have to use this; if you provide your own then your modes needn't
