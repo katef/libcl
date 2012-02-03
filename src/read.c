@@ -72,6 +72,52 @@ append(void *base, size_t basesz, size_t *count, const char *s)
 	return base;
 }
 
+/*
+ * The command is stored verbatim as input by the user, followed directly by
+ * each token's content, each null terminated.
+ *
+ * Tokens have escape sequences expanded, string quotes skipped and inter-token
+ * whitespace omitted. For example (in C's notation):
+ *
+ *  src = " abc \t  def 'xyz' \"x\\t\\n\""
+ *  dst = "abc\0def\0xyz\0x\t\n"
+ *
+ * gives the four tokens "abc", "def", "xyz" and "x\t\n".
+ *
+ * The worst case for memory use here is a sequence of pipes, where every
+ * character requires termination. So the worst case memory for dst is twice
+ * src, plus one for the single terminator at the end of src.
+ */
+static int
+terminatecommand(struct cl_peer *p, const char **src, char **dst)
+{
+	struct readctx *tmp;
+	char *s;
+
+	assert(p != NULL);
+	assert(src != NULL);
+	assert(dst != NULL);
+
+	tmp = realloc(p->rctx, sizeof *p->rctx + p->rctx->count * 3 + 1);
+	if (tmp == NULL) {
+		return -1;
+	}
+
+	p->rctx = tmp;
+
+	s = (char *) p->rctx + sizeof *p->rctx;
+
+	s[p->rctx->count] = '\0';
+
+	assert(strchr(s, '\r') == NULL);
+	assert(strchr(s, '\n') == NULL);
+
+	*src = s;
+	*dst = s + p->rctx->count + 1;
+
+	return 0;
+}
+
 static int
 parsecommand(struct cl_peer *p, const char *src, char *dst)
 {
@@ -312,8 +358,45 @@ getc_main(struct cl_peer *p, struct cl_event *event)
 			/* TODO: clear current (prompt) line instead? */
 			cl_printf(p, "?\n");
 
-			/* TODO: not implemented to show context-sensitive help for command arguments */
-			cl_help(p, p->mode);
+			{
+				struct lex_tok tok;
+				const struct trie *trie;
+				const char *src;
+				char *dst;
+
+				trie = p->tree->root;
+
+				if (-1 == terminatecommand(p, &src, &dst)) {
+					/* TODO: free something? */
+					return -1;
+				}
+
+				while (lex_next(&tok, &src, &dst) != NULL) {
+					const struct trie *t;
+
+					if (tok.type != TOK_WORD) {
+						break;
+					}
+
+					t = trie_walk(trie, tok.dst.start, tok.dst.end - tok.dst.start);
+					if (t == NULL) {
+						break;
+					}
+
+					trie = t;
+
+					t = trie_walk(trie, " ", 1);
+					if (t == NULL) {
+						break;
+					}
+
+					trie = t;
+				}
+
+				assert(trie != NULL);
+
+				trie_help(p, trie, p->mode);
+			}
 
 			p->tree->printprompt(p, p->mode);
 
@@ -331,43 +414,17 @@ getc_main(struct cl_peer *p, struct cl_event *event)
 		case '\n':
 			cl_printf(p, "\n");
 
-			/*
-			 * Memory is layed out here such that the command is stored
-			 * verbatim as input by the user, followed directly by a second
-			 * copy containing just the lexeme contents, each null terminated.
-			 *
-			 * These have escape sequences expanded, string quotes skipped and
-			 * inter-token whitespace omitted. For example (in C's notation):
-			 *
-			 *  src = " abc \t  def 'xyz' \"x\\t\\n\""
-			 *  dst = "abc\0def\0xyz\0x\t\n"
-			 *
-			 * gives the four tokens "abc", "def", "xyz" and "x\t\n".
-			 *
-			 * The worst case for memory use here is a sequence of pipes, where
-			 * every character requires termination. So the worst case memory
-			 * for dst is twice src, plus one for the single terminator for src.
-			 */
 			{
-				struct readctx *tmp;
-				char *s;
+				const char *src;
+				char *dst;
 				int r;
 
-				tmp = realloc(p->rctx, sizeof *p->rctx + p->rctx->count * 3 + 1);
-				if (tmp == NULL) {
+				if (-1 == terminatecommand(p, &src, &dst)) {
+					/* TODO: free something? */
 					return -1;
 				}
 
-				p->rctx = tmp;
-
-				s = (char *) p->rctx + sizeof *p->rctx;
-
-				s[p->rctx->count] = '\0';
-
-				assert(strchr(s, '\r') == NULL);
-				assert(strchr(s, '\n') == NULL);
-
-				r = parsecommand(p, s, s + p->rctx->count + 1);
+				r = parsecommand(p, src, dst);
 
 				p->rctx->count = 0;	/* XXX: not sure why i need to do this here... */
 
@@ -463,6 +520,10 @@ firstfield:
 				/* TODO: free argv etc */
 
 				p->tree->printprompt(p, p->mode);
+
+				if (p->rctx->argc > 0) {
+					free(p->rctx->argv);
+				}
 
 				p->rctx->state = STATE_NEW;
 				return 0;
