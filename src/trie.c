@@ -27,6 +27,8 @@ trie_add(struct trie **trie, const char *s, const struct cl_command *command)
 
 		(*trie)->command = NULL;
 
+		/* TODO: assert(SIZE_MAX > UCHAR_MAX); */
+
 		for (i = 0; i < sizeof (*trie)->edge / sizeof *(*trie)->edge; i++) {
 			(*trie)->edge[i] = NULL;
 		}
@@ -82,5 +84,50 @@ trie_walk(const struct trie *trie, const char *s, size_t len)
 	} while (len > 0);
 
 	return trie;
+}
+
+void
+trie_help(struct cl_peer *p, const struct trie *trie, int mode)
+{
+	size_t i;
+
+	assert(p != NULL);
+	assert(p->tree != NULL);
+	assert(p->tree->commands != NULL);
+	assert(trie != NULL);
+
+	if (trie->command != NULL) {
+		size_t i;
+
+		for (i = 0; i < p->tree->command_count; i++) {
+			assert(trie->command->command != NULL);
+			assert(p->tree->commands[i].command != NULL);
+
+			if (0 != strcmp(p->tree->commands[i].command, trie->command->command)) {
+				continue;
+			}
+
+			if (!p->tree->visible(p, mode, p->tree->commands[i].modes)) {
+				continue;
+			}
+
+			if (p->tree->commands[i].usage == NULL) {
+				cl_printf(p, "  %-18s\n", p->tree->commands[i].command);
+			} else {
+				cl_printf(p, "  %-18s - %s\n", p->tree->commands[i].command,
+					p->tree->commands[i].usage);
+			}
+		}
+	}
+
+	/* TODO: assert(SIZE_MAX > UCHAR_MAX); */
+
+	for (i = 0; i < sizeof trie->edge / sizeof *trie->edge; i++) {
+		if (trie->edge[i] == NULL) {
+			continue;
+		}
+
+		trie_help(p, trie->edge[i], mode);
+	}
 }
 
