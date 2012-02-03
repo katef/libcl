@@ -143,6 +143,8 @@ struct lex_tok {
 
 struct trie *
 trie_add(struct trie **trie, const char *s, const struct cl_command *command);
+const struct trie *
+trie_walk(const struct trie *trie, const char *s, size_t len);
 
 const struct cl_field *
 find_field(struct cl_tree *t, int id);

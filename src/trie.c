@@ -64,3 +64,23 @@ trie_add(struct trie **trie, const char *s, const struct cl_command *command)
 	return trie_add(&(*trie)->edge[(unsigned char) *s], s + 1, command);
 }
 
+const struct trie *
+trie_walk(const struct trie *trie, const char *s, size_t len)
+{
+	assert(trie != NULL);
+	assert(s != NULL);
+	assert(len > 0);
+
+	do {
+		trie = trie->edge[(unsigned char) *s];
+		if (trie == NULL) {
+			return NULL;
+		}
+
+		s++;
+		len--;
+	} while (len > 0);
+
+	return trie;
+}
+
