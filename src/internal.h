@@ -102,7 +102,7 @@ struct trie_command {
 };
 
 struct trie {
-	struct trie *edge[UCHAR_MAX];
+	struct trie *edge[UCHAR_MAX + 1];
 
 	struct trie_command *command;
 };
