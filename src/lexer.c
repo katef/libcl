@@ -98,13 +98,13 @@ lex_next(struct lex_tok *new, const char **src, char **dst)
 			case '\0':                                    goto error;
 			case '\\': *d++ = '\\';   state = STATE_STR2; continue;
 			case '\"': *d++ = '\"';   state = STATE_STR2; continue;
-			case '\n': *d++ = '\n';   state = STATE_STR2; continue;
-			case '\r': *d++ = '\r';   state = STATE_STR2; continue;
-			case '\t': *d++ = '\t';   state = STATE_STR2; continue;
-			case '\v': *d++ = '\v';   state = STATE_STR2; continue;
-			case '\f': *d++ = '\f';   state = STATE_STR2; continue;
-			case '\e': *d++ = '\033'; state = STATE_STR2; continue;
-			default:                                      return NULL;
+			case 'n':  *d++ = '\n';   state = STATE_STR2; continue;
+			case 'r':  *d++ = '\r';   state = STATE_STR2; continue;
+			case 't':  *d++ = '\t';   state = STATE_STR2; continue;
+			case 'v':  *d++ = '\v';   state = STATE_STR2; continue;
+			case 'f':  *d++ = '\f';   state = STATE_STR2; continue;
+			case 'e':  *d++ = '\033'; state = STATE_STR2; continue;
+			default:                                      goto error;
 			}
 		}
 	}
@@ -116,7 +116,7 @@ error:
 done:
 
 	*src = s;
-	*d++ = '\0';
+	*d = '\0';
 
 	new->dst.end = d;
 	new->src.end = s;
