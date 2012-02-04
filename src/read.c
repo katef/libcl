@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <ctype.h>
 
 #include "internal.h"
 
@@ -331,9 +332,51 @@ getc_main(struct cl_peer *p, struct cl_event *event)
 
 			return 0;
 
+		case UI_DELETE_WORD:
+			{
+				struct lex_tok tok[2];
+				const char *src;
+				char *dst;
+				size_t i;
+
+				if (-1 == terminatecommand(p, &src, &dst)) {
+					/* TODO: free something? */
+					return -1;
+				}
+
+				tok[0].src.start = tok[0].src.end = src;
+				tok[1].src.start = tok[1].src.end = src;
+
+				for (i = 0; lex_next(&tok[i], &src, &dst) != NULL; i = !i) {
+					if (tok[i].type == TOK_ERROR) {
+						break;
+					}
+				}
+
+				/* leave a single trailing space if we're just deleting one
+				 * token, as long as it's not SOL */
+				if (tok[i].src.end != tok[i].src.start) {
+					tok[i].src.end += isspace((unsigned char) *tok[i].src.end);
+				}
+
+				i = strlen(tok[i].src.end);
+
+				assert(p->rctx->count >= i);
+
+				p->rctx->count -= i;
+
+				/* XXX: placeholder for "go left X characters and delete to EOL */
+				while (i-- > 0) {
+					if (-1 == p->chctx->ioapi->send(p, p->chctx + 0, OUT_BACKSPACE_AND_DELETE)) {
+						return -1;
+					}
+				}
+			}
+
+			return 0;
+
 		case UI_DELETE:
 		case UI_DELETE_TO_EOL:
-		case UI_DELETE_WORD:
 		case UI_CANCEL:	/* ^C to abort current command */
 			/* TODO: not implemented */
 			return 0;
