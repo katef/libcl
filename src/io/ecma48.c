@@ -174,8 +174,9 @@ ecma48_recv(struct cl_peer *p, struct cl_chctx chctx[],
 			if (key.modifiers & TERMKEY_KEYMOD_CTRL) {
 				switch (e.u.utf8[0]) {
 				case 'c': e.type = UI_CANCEL;      break;
-				case 'w': e.type = UI_DELETE_WORD; break;
 				case 'h': e.type = UI_BACKSPACE;   break;
+				case 'u': e.type = UI_DELETE_LINE; break;
+				case 'w': e.type = UI_DELETE_WORD; break;
 
 				/* TODO: emacs-style line editing */
 

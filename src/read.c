@@ -375,6 +375,17 @@ getc_main(struct cl_peer *p, struct cl_event *event)
 
 			return 0;
 
+		case UI_DELETE_LINE:
+			/* XXX: placeholder for "go left X characters and delete to EOL */
+			while (p->rctx->count > 0) {
+				if (-1 == p->chctx->ioapi->send(p, p->chctx + 0, OUT_BACKSPACE_AND_DELETE)) {
+					return -1;
+				}
+
+				p->rctx->count--;
+			}
+			return 0;
+
 		case UI_DELETE:
 		case UI_DELETE_TO_EOL:
 		case UI_CANCEL:	/* ^C to abort current command */
@@ -528,6 +539,7 @@ getc_main(struct cl_peer *p, struct cl_event *event)
 
 		case UI_BACKSPACE:
 		case UI_DELETE:
+		case UI_DELETE_LINE:
 		case UI_DELETE_TO_EOL:
 		case UI_DELETE_WORD:
 			/* TODO: not implemented */
