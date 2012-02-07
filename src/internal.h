@@ -37,6 +37,12 @@ enum ui_output {
 	OUT_RESTORE_AND_DELETE_TO_EOL
 };
 
+enum edit_flags {
+	EDIT_ECHO = 1 << 0,
+	EDIT_TRIE = 1 << 1,
+	EDIT_HIST = 1 << 2
+};
+
 struct cl_peer;
 struct cl_command;
 
@@ -119,8 +125,10 @@ struct cl_peer {
 	int mode;
 
 	struct cl_term term;
+
 	struct termctx *tctx;
 	struct readctx *rctx;
+	struct editctx *ectx;
 	struct cl_chctx *chctx;
 
 	const struct cl_chain *chain;
@@ -156,13 +164,18 @@ find_field(struct cl_tree *t, int id);
 struct readctx *read_create(void);
 void read_destroy(struct readctx *read);
 const char *read_get_field(struct readctx *rc, int id);
-int getc_main(struct cl_peer *p, struct cl_event *event);
+int getc_main(struct cl_peer *p, const struct cl_event *event);
 
 struct termctx *term_create(struct cl_term *term, const char *name);
 void term_destroy(struct termctx *t);
 
 struct lex_tok *
 lex_next(struct lex_tok *new, const char **src, char **dst);
+
+struct editctx *edit_create(void);
+void edit_destroy(struct editctx *ectx);
+char *edit_release(struct editctx *ectx);
+int edit_push(struct cl_peer *p, const struct cl_event *event, enum edit_flags flags);
 
 #endif
 

@@ -132,6 +132,14 @@ cl_accept(struct cl_tree *t, enum cl_io io)
 		return NULL;
 	}
 
+	new->ectx = edit_create();
+	if (new->ectx == NULL) {
+		free(new->chctx);
+		read_destroy(new->rctx);
+		free(new);
+		return NULL;
+	}
+
 	new->tree   = t;
 	new->mode   = 0;
 	new->ttype  = NULL;

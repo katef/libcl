@@ -7,13 +7,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#include <ctype.h>
 
 #include "internal.h"
 
 enum readstate {
 	STATE_NEW,
-	STATE_CHAR,
+	STATE_COMMAND,
 	STATE_FIELD
 };
 
@@ -29,49 +28,9 @@ struct readctx {
 	const struct trie *t;
 	int fields;
 	struct value *values;
-	size_t count;
 	int argc;
 	const char **argv;
 };
-
-static void *
-append(void *base, size_t basesz, size_t *count, const char *s)
-{
-	const size_t blocksz = 32;
-	size_t n;
-	size_t prev;
-
-	assert(base != NULL);
-	assert(basesz > 0);
-	assert(count != NULL);
-	assert(s != NULL);
-
-	n = strlen(s);
-
-	assert(n != 0);
-	assert(n < blocksz);
-
-	if (*count > INT_MAX - n) {
-		errno = ENOMEM;
-		return NULL;
-	}
-
-	prev = *count;
-
-	/* we're assigning up here because realloc below may move count */
-	*count += n;
-
-	if ((*count - 1) % blocksz < n) {
-		base = realloc(base, basesz + prev + blocksz);
-		if (base == NULL) {
-			return NULL;
-		}
-	}
-
-	memcpy((char *) base + basesz + prev, s, n);
-
-	return base;
-}
 
 /*
  * The command is stored verbatim as input by the user, followed directly by
@@ -89,36 +48,6 @@ append(void *base, size_t basesz, size_t *count, const char *s)
  * character requires termination. So the worst case memory for dst is twice
  * src, plus one for the single terminator at the end of src.
  */
-static int
-terminatecommand(struct cl_peer *p, const char **src, char **dst)
-{
-	struct readctx *tmp;
-	char *s;
-
-	assert(p != NULL);
-	assert(src != NULL);
-	assert(dst != NULL);
-
-	tmp = realloc(p->rctx, sizeof *p->rctx + p->rctx->count * 3 + 1);
-	if (tmp == NULL) {
-		return -1;
-	}
-
-	p->rctx = tmp;
-
-	s = (char *) p->rctx + sizeof *p->rctx;
-
-	s[p->rctx->count] = '\0';
-
-	assert(strchr(s, '\r') == NULL);
-	assert(strchr(s, '\n') == NULL);
-
-	*src = s;
-	*dst = s + p->rctx->count + 1;
-
-	return 0;
-}
-
 static int
 parsecommand(struct cl_peer *p, const char *src, char *dst)
 {
@@ -290,344 +219,152 @@ read_get_field(struct readctx *rctx, int id)
 	return NULL;
 }
 
+static enum edit_flags
+flags(enum readstate state)
+{
+	switch (state) {
+	case STATE_NEW:
+	case STATE_COMMAND: return EDIT_ECHO | EDIT_TRIE | EDIT_HIST;
+	case STATE_FIELD:   return EDIT_ECHO; /* TODO: depends on the field */
+	}
+}
+
 int
-getc_main(struct cl_peer *p, struct cl_event *event)
+getc_main(struct cl_peer *p, const struct cl_event *event)
 {
 	assert(p != NULL);
 	assert(p->tree != NULL);
 	assert(p->tree->root != NULL);
 	assert(p->rctx != NULL);
+	assert(p->ectx != NULL);
 	assert(event != NULL);
 
-	if (event->type == UI_CODEPOINT && event->u.utf8[0] == '\r') {
-		return 0;
+	{
+		int r;
+
+		r = edit_push(p, event, flags(p->rctx->state));
+		if (r == -1) {
+			return -1;
+		}
+
+		if (r == 0) {
+			return 0;
+		}
 	}
 
 	switch (p->rctx->state) {
 	case STATE_NEW:
-		p->rctx->state  = STATE_CHAR;
-		p->rctx->fields = 0;
-		p->rctx->values = NULL;
-		p->rctx->count  = 0;
+		p->rctx->state  = STATE_COMMAND;
 
 		/* FALLTHROUGH */
 
-	case STATE_CHAR:
-		switch (event->type) {
-		case UI_CODEPOINT:
-			break;
+	case STATE_COMMAND:
+		cl_printf(p, "\n");
 
-		case UI_BACKSPACE:
-			/* XXX: this should walk back one unicode character's worth, not just one byte */
+		{
+			size_t count;
+			char *src;
+			char *buf;
+			int r;
 
-			if (p->rctx->count == 0) {
+			buf = edit_release(p->ectx);
+
+			if (buf == NULL) {
+				p->tree->printprompt(p, p->mode);
+
+				p->rctx->state = STATE_NEW;
 				return 0;
 			}
 
-			if (-1 == p->chctx->ioapi->send(p, p->chctx + 0, OUT_BACKSPACE_AND_DELETE)) {
+			/*
+			 * Note there is no point in checking for an empty string here,
+			 * as for example it could be entirely whitespace, and we'd still
+			 * need to lex it to find out.
+			 */
+			count = strlen(buf);
+
+			/* see parsecommand() */
+			src = realloc(buf, count * 3 + 1);
+			if (src == NULL) {
+				/* TODO: free something? */
 				return -1;
 			}
 
-			p->rctx->count--;
-
-			return 0;
-
-		case UI_DELETE_WORD:
-			{
-				struct lex_tok tok[2];
-				const char *src;
-				char *dst;
-				size_t i;
-
-				if (-1 == terminatecommand(p, &src, &dst)) {
-					/* TODO: free something? */
-					return -1;
-				}
-
-				tok[0].src.start = tok[0].src.end = src;
-				tok[1].src.start = tok[1].src.end = src;
-
-				for (i = 0; lex_next(&tok[i], &src, &dst) != NULL; i = !i) {
-					if (tok[i].type == TOK_ERROR) {
-						break;
-					}
-				}
-
-				/* leave a single trailing space if we're just deleting one
-				 * token, as long as it's not SOL */
-				if (tok[i].src.end != tok[i].src.start) {
-					tok[i].src.end += isspace((unsigned char) *tok[i].src.end);
-				}
-
-				i = strlen(tok[i].src.end);
-
-				assert(p->rctx->count >= i);
-
-				p->rctx->count -= i;
-
-				/* XXX: placeholder for "go left X characters and delete to EOL */
-				while (i-- > 0) {
-					if (-1 == p->chctx->ioapi->send(p, p->chctx + 0, OUT_BACKSPACE_AND_DELETE)) {
-						return -1;
-					}
-				}
+			r = parsecommand(p, src, src + count + 1);
+			if (r == -1) {
+				/* TODO: free argv etc */
+				return -1;
 			}
 
-			return 0;
+			if (r == 0) {
+				p->tree->printprompt(p, p->mode);
 
-		case UI_DELETE_LINE:
-			/* XXX: placeholder for "go left X characters and delete to EOL */
-			while (p->rctx->count > 0) {
-				if (-1 == p->chctx->ioapi->send(p, p->chctx + 0, OUT_BACKSPACE_AND_DELETE)) {
-					return -1;
-				}
-
-				p->rctx->count--;
+				p->rctx->state = STATE_NEW;
+				return 0;
 			}
-			return 0;
 
-		case UI_DELETE:
-		case UI_DELETE_TO_EOL:
-		case UI_CANCEL:	/* ^C to abort current command */
-			/* TODO: not implemented */
-			return 0;
-
-		case UI_HIST_PREV:
-		case UI_HIST_NEXT:
-			/* TODO: not implemented */
-			return 0;
-
-		case UI_CURSOR_LEFT:
-		case UI_CURSOR_RIGHT:
-		case UI_CURSOR_LEFT_WORD:
-		case UI_CURSOR_RIGHT_WORD:
-		case UI_CURSOR_EOL:
-		case UI_CURSOR_SOL:
-			/* TODO: not implemented */
-			return 0;
+			free(src);
 		}
 
-		switch (event->u.utf8[0]) {
-		case '?':
-			/* TODO: clear current (prompt) line instead? */
-			cl_printf(p, "?\n");
+		p->rctx->fields = p->rctx->t->command->fields;
+		p->rctx->values = NULL;
+		p->rctx->state  = STATE_FIELD;
 
-			{
-				struct lex_tok tok;
-				const struct trie *trie;
-				const char *src;
-				char *dst;
-
-				trie = p->tree->root;
-
-				if (-1 == terminatecommand(p, &src, &dst)) {
-					/* TODO: free something? */
-					return -1;
-				}
-
-				while (lex_next(&tok, &src, &dst) != NULL) {
-					const struct trie *t;
-
-					if (tok.type != TOK_WORD) {
-						break;
-					}
-
-					t = trie_walk(trie, tok.dst.start, tok.dst.end - tok.dst.start);
-					if (t == NULL) {
-						break;
-					}
-
-					trie = t;
-
-					t = trie_walk(trie, " ", 1);
-					if (t == NULL) {
-						break;
-					}
-
-					trie = t;
-				}
-
-				assert(trie != NULL);
-
-				trie_help(p, trie, p->mode);
-			}
-
-			p->tree->printprompt(p, p->mode);
-
-			assert(p->rctx->count <= INT_MAX);
-
-			cl_printf(p, "%.*s", (int) p->rctx->count, (const char *) p->rctx + sizeof *p->rctx);
-
-			p->rctx->state = STATE_CHAR;
-			return 0;
-
-		case '\t':
-			/* TODO: not implemented */
-			return 0;
-
-		case '\n':
-			cl_printf(p, "\n");
-
-			{
-				const char *src;
-				char *dst;
-				int r;
-
-				if (-1 == terminatecommand(p, &src, &dst)) {
-					/* TODO: free something? */
-					return -1;
-				}
-
-				r = parsecommand(p, src, dst);
-
-				p->rctx->count = 0;	/* XXX: not sure why i need to do this here... */
-
-				if (r == -1) {
-					/* TODO: free argv etc */
-					return -1;
-				}
-
-				if (r == 0) {
-					p->tree->printprompt(p, p->mode);
-
-					p->rctx->state = STATE_NEW;
-					return 0;
-				}
-			}
-
-			p->rctx->fields = p->rctx->t->command->fields;
-			p->rctx->state  = STATE_FIELD;
-
-			goto firstfield;
-
-		default:
-			/* TODO: maybe not for IO_PLAIN */
-			cl_printf(p, "%s", event->u.utf8);
-
-			{
-				struct readctx *tmp;
-
-				tmp = append(p->rctx, sizeof *p->rctx,
-					&p->rctx->count, event->u.utf8);
-				if (tmp == NULL) {
-					return -1;
-				}
-
-				p->rctx = tmp;
-			}
-
-			return 0;
-		}
+		goto firstfield;
 
 	/* TODO: I'm not sure we even need fields. Can they be viewed as a
 	 * different kind of prompt, but without word-tokenised whitespace input?
 	 * i.e. without the trie? so we'd have STATE_FIELD instead of STATE_CHAR,
 	 * and ignore the trie. but that's essentially what we're doing here. */
 	case STATE_FIELD:
-		switch (event->type) {
-		case UI_HIST_PREV:
-		case UI_HIST_NEXT:
-			/* no effect when entering fields */
-			return 0;
+		cl_printf(p, "\n");
 
-		case UI_CODEPOINT:
-			break;
+		p->rctx->values->value = edit_release(p->ectx);
 
-		case UI_CANCEL:	/* ^C to abort current command */
-			/* TODO: not implemented; abandon all fields and go back to STATE_NEW */
-			return 0;
-
-		case UI_BACKSPACE:
-		case UI_DELETE:
-		case UI_DELETE_LINE:
-		case UI_DELETE_TO_EOL:
-		case UI_DELETE_WORD:
-			/* TODO: not implemented */
-			return 0;
-
-		case UI_CURSOR_LEFT:
-		case UI_CURSOR_RIGHT:
-		case UI_CURSOR_LEFT_WORD:
-		case UI_CURSOR_RIGHT_WORD:
-		case UI_CURSOR_EOL:
-		case UI_CURSOR_SOL:
-			/* TODO: no effect when enterining non-echoing fields */
-			/* TODO: not implemented */
-			return 0;
-		}
-
-		switch (event->u.utf8[0]) {
-		case '\n':
-			cl_printf(p, "\n");
-
-			p->rctx->values->value = (char *) p->rctx->values + sizeof *p->rctx->values;
-			p->rctx->values->value[p->rctx->count] = '\0';
-
-			p->rctx->fields &= p->rctx->fields - 1;
+		p->rctx->fields &= p->rctx->fields - 1;
 
 firstfield:
 
-			if (p->rctx->fields == 0) {
-				p->rctx->t->command->callback(p, p->rctx->t->command->command,
-					p->mode, p->rctx->argc, p->rctx->argv);
+		if (p->rctx->fields == 0) {
+			/* TODO: re-set EDIT_ECHO */
 
-				/* TODO: free .values list */
-				/* TODO: free argv etc */
+			p->rctx->t->command->callback(p, p->rctx->t->command->command,
+				p->mode, p->rctx->argc, p->rctx->argv);
 
-				p->tree->printprompt(p, p->mode);
+			/* TODO: free .values list */
+			/* TODO: free argv etc */
 
-				if (p->rctx->argc > 0) {
-					free(p->rctx->argv);
-				}
+			p->tree->printprompt(p, p->mode);
 
-				p->rctx->state = STATE_NEW;
-				return 0;
+			if (p->rctx->argc > 0) {
+				free(p->rctx->argv);
 			}
 
-			{
-				struct value *new;
-
-				new = malloc(sizeof *new + 1);
-				if (new == NULL) {
-					/* TODO: free .values list */
-					/* TODO: free argv etc */
-					return -1;
-				}
-
-				new->id    = p->rctx->fields & ~(p->rctx->fields - 1);
-				new->value = (char *) new + sizeof *new;
-				new->next  = p->rctx->values;
-
-				p->rctx->values = new;
-				p->rctx->count  = 0;
-			}
-
-			fieldprompt(p);
-
-			/* TODO: turn off echo if appropriate */
-
-			return 0;
-
-		default:
-			/* TODO: only if echoing for this field */
-			cl_printf(p, "%s", event->u.utf8);
-
-			{
-				struct value *tmp;
-
-				tmp = append(p->rctx->values, sizeof *p->rctx->values,
-					&p->rctx->count, event->u.utf8);
-				if (tmp == NULL) {
-					/* TODO: free .values list */
-					/* TODO: free argv etc */
-					return -1;
-				}
-
-				p->rctx->values = tmp;
-			}
-
+			p->rctx->state = STATE_NEW;
 			return 0;
 		}
+
+		{
+			struct value *new;
+
+			new = malloc(sizeof *new);
+			if (new == NULL) {
+				/* TODO: free .values list */
+				/* TODO: free argv etc */
+				return -1;
+			}
+
+			new->id   = p->rctx->fields & ~(p->rctx->fields - 1);
+			new->next = p->rctx->values;
+
+			p->rctx->values = new;
+
+			/* TODO: set EDIT_ECHO as per this field */
+		}
+
+		fieldprompt(p);
+
+		return 0;
 	}
 
 	/* UNREACHED */

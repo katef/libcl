@@ -10,6 +10,7 @@ SRCS+= trie.c
 SRCS+= field.c
 SRCS+= term.c
 SRCS+= read.c
+SRCS+= edit.c
 SRCS+= lexer.c
 
 SRCS+= io/start.c
