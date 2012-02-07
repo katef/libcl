@@ -11,6 +11,7 @@
 
 enum ui_event {
 	UI_CODEPOINT,
+	UI_HELP,
 
 	UI_BACKSPACE,
 	UI_DELETE,

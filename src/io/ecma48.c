@@ -120,7 +120,7 @@ ecma48_recv(struct cl_peer *p, struct cl_chctx chctx[],
 
 		case TERMKEY_TYPE_FUNCTION:
 			switch (key.code.number) {
-			case 1: e.type = UI_CODEPOINT; e.u.utf8 = "?";  break;
+			case 1: e.type = UI_HELP; break;
 
 			default:
 				continue;
@@ -151,15 +151,15 @@ ecma48_recv(struct cl_peer *p, struct cl_chctx chctx[],
 			case TERMKEY_SYM_HOME:      e.type = UI_CURSOR_SOL;    break;
 			case TERMKEY_SYM_END:       e.type = UI_CURSOR_EOL;    break;
 			case TERMKEY_SYM_CLEAR:     e.type = UI_DELETE_TO_EOL; break;
-			case TERMKEY_SYM_EXIT:      e.type = UI_CANCEL;        break;
+	 		case TERMKEY_SYM_EXIT:      e.type = UI_CANCEL;        break;
 			case TERMKEY_SYM_REDO:      e.type = UI_CANCEL;        break;
 			case TERMKEY_SYM_CANCEL:    e.type = UI_CANCEL;        break;
 			case TERMKEY_SYM_RESTART:   e.type = UI_CANCEL;        break;
+			case TERMKEY_SYM_HELP:      e.type = UI_HELP;          break;
 
 			case TERMKEY_SYM_TAB:       e.type = UI_CODEPOINT; e.u.utf8 = "\t"; break;
 			case TERMKEY_SYM_ENTER:     e.type = UI_CODEPOINT; e.u.utf8 = "\n"; break;
 			case TERMKEY_SYM_SPACE:     e.type = UI_CODEPOINT; e.u.utf8 = " ";  break;
-			case TERMKEY_SYM_HELP:      e.type = UI_CODEPOINT; e.u.utf8 = "?";  break;
 
 			default:
 				continue;
