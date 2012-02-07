@@ -23,10 +23,9 @@ lex_next(struct lex_tok *new, const char **src, char **dst)
 
 	assert(new != NULL);
 	assert(src != NULL);
-	assert(dst != NULL);
 
 	s = *src;
-	d = *dst;
+	d = dst ? *dst : NULL;
 
 	assert(!strchr(s, '\r'));
 	assert(!strchr(s, '\n'));
@@ -50,7 +49,7 @@ lex_next(struct lex_tok *new, const char **src, char **dst)
 			default:   new->src.start = s; state = STATE_WORD; break;
 			}
 
-			*d++ = *s;
+			if (d) *d++ = *s;
 			continue;
 
 		case STATE_PIPE:
@@ -68,7 +67,7 @@ lex_next(struct lex_tok *new, const char **src, char **dst)
 			default:   break;
 			}
 
-			*d++ = *s;
+			if (d) *d++ = *s;
 			continue;
 
 		case STATE_STR1: /* without escaping */
@@ -78,7 +77,7 @@ lex_next(struct lex_tok *new, const char **src, char **dst)
 			default:         break;
 			}
 
-			*d++ = *s;
+			if (d) *d++ = *s;
 			continue;
 
 		case STATE_STR2: /* with escaping */
@@ -89,22 +88,22 @@ lex_next(struct lex_tok *new, const char **src, char **dst)
 			default:                      break;
 			}
 
-			*d++ = *s;
+			if (d) *d++ = *s;
 			continue;
 
 		case STATE_ESC:
 			/* TODO: octal, hex etc */
 			switch (*s) {
-			case '\0':                                    goto error;
-			case '\\': *d++ = '\\';   state = STATE_STR2; continue;
-			case '\"': *d++ = '\"';   state = STATE_STR2; continue;
-			case 'n':  *d++ = '\n';   state = STATE_STR2; continue;
-			case 'r':  *d++ = '\r';   state = STATE_STR2; continue;
-			case 't':  *d++ = '\t';   state = STATE_STR2; continue;
-			case 'v':  *d++ = '\v';   state = STATE_STR2; continue;
-			case 'f':  *d++ = '\f';   state = STATE_STR2; continue;
-			case 'e':  *d++ = '\033'; state = STATE_STR2; continue;
-			default:                                      goto error;
+			case '\0':                                           goto error;
+			case '\\': if (d) *d++ = '\\';   state = STATE_STR2; continue;
+			case '\"': if (d) *d++ = '\"';   state = STATE_STR2; continue;
+			case 'n':  if (d) *d++ = '\n';   state = STATE_STR2; continue;
+			case 'r':  if (d) *d++ = '\r';   state = STATE_STR2; continue;
+			case 't':  if (d) *d++ = '\t';   state = STATE_STR2; continue;
+			case 'v':  if (d) *d++ = '\v';   state = STATE_STR2; continue;
+			case 'f':  if (d) *d++ = '\f';   state = STATE_STR2; continue;
+			case 'e':  if (d) *d++ = '\033'; state = STATE_STR2; continue;
+			default:                                             goto error;
 			}
 		}
 	}
@@ -116,7 +115,7 @@ error:
 done:
 
 	*src = s;
-	*d = '\0';
+	if (d) *d = '\0';
 
 	new->dst.end = d;
 	new->src.end = s;
