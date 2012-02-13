@@ -226,9 +226,16 @@ cl_get_opaque(struct cl_peer *p)
 const char *
 cl_get_field(struct cl_peer *p, int id)
 {
+	const char *v;
+
 	assert(p != NULL);
 
-	return read_get_field(p->rctx, id);
+	v = read_get_field(p->rctx, id);
+	if (v == NULL) {
+		return "";
+	}
+
+	return v;
 }
 
 int
