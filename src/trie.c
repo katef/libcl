@@ -86,6 +86,90 @@ trie_walk(const struct trie *trie, const char *s, size_t len)
 	return trie;
 }
 
+static const struct trie *
+trie_next(struct cl_peer *p, const struct trie *trie, int mode, char c,
+	const struct trie **prev)
+{
+	size_t i;
+
+	assert(trie != NULL);
+	assert(p->tree->visible != NULL);
+	assert(prev != NULL);
+
+	if (trie->command != NULL && p->tree->visible(p, mode, trie->command->modes)) {
+		assert(trie->command->command != NULL);
+
+		if (*prev == NULL) {
+			return trie;
+		}
+
+		if (*prev == trie) {
+			*prev = NULL;
+		}
+	}
+
+	/* TODO: assert(SIZE_MAX > UCHAR_MAX); */
+
+	for (i = 0; i < sizeof trie->edge / sizeof *trie->edge; i++) {
+		const struct trie *next;
+
+		if (trie->edge[i] == NULL) {
+			continue;
+		}
+
+		/* TODO: i don't like that this has knowledge of a specific char */
+		if (i == c) {
+			assert(trie->edge[i] != NULL);
+
+			return trie->edge[i];
+		}
+
+		next = trie_next(p, trie->edge[i], mode, c, prev);
+		if (next != NULL) {
+			return next;
+		}
+	}
+
+	return NULL;
+}
+
+const struct trie *
+trie_cycle(struct cl_peer *p, const struct trie *trie, int mode, char c,
+	const struct trie *prev)
+{
+	const struct trie *next;
+
+	assert(p != NULL);
+	assert(p->tree != NULL);
+	assert(p->tree->visible != NULL);
+	assert(trie != NULL);
+
+	next = trie_next(p, trie, mode, c, &prev);
+	if (next != NULL) {
+		return next;
+	}
+
+	return trie_next(p, trie, mode, c, &next);
+}
+
+const struct trie *
+trie_run(struct cl_peer *p, const struct trie *trie, int mode, char c)
+{
+	assert(p != NULL);
+	assert(trie != NULL);
+
+	trie = trie_cycle(p, trie, mode, ' ', NULL);
+	if (trie == NULL) {
+		return NULL;
+	}
+
+	if (trie->command != NULL && trie != trie_cycle(p, trie, mode, ' ', trie)) {
+		return NULL;
+	}
+
+	return trie;
+}
+
 void
 trie_help(struct cl_peer *p, const struct trie *trie, int mode)
 {

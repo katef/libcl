@@ -155,6 +155,14 @@ struct trie *
 trie_add(struct trie **trie, const char *s, const struct cl_command *command);
 const struct trie *
 trie_walk(const struct trie *trie, const char *s, size_t len);
+const struct trie *
+trie_cycle(struct cl_peer *p, const struct trie *trie, int mode, char c,
+	const struct trie *prev);
+
+/* returns NULL for ambiguity */
+const struct trie *
+trie_run(struct cl_peer *p, const struct trie *trie, int mode, char c);
+
 void
 trie_help(struct cl_peer *p, const struct trie *trie, int mode);
 
