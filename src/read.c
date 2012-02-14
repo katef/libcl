@@ -60,8 +60,6 @@ parsecommand(struct cl_peer *p, const char *src, char *dst)
 	p->rctx->t = p->tree->root;
 
 	while (lex_next(&tok, &src, &dst) != NULL) {
-		const struct trie *t;
-
 		switch (tok.type) {
 		case TOK_ERROR:
 		case TOK_PIPE:	/* not implemented */
@@ -79,21 +77,25 @@ parsecommand(struct cl_peer *p, const char *src, char *dst)
 			return 0;
 		}
 
-		t = trie_walk(p->rctx->t, tok.dst.start, tok.dst.end - tok.dst.start);
-		if (t == NULL) {
+		p->rctx->t = trie_walk(p->rctx->t, tok.dst.start, tok.dst.end - tok.dst.start);
+		if (p->rctx->t == NULL) {
 			cl_printf(p, "command not found\n");
 
 			return 0;
 		}
 
-		p->rctx->t = t;
+		p->rctx->t = trie_run(p, p->rctx->t, p->mode, ' ');
+		if (p->rctx->t == NULL) {
+			cl_printf(p, "command not found\n");
 
-		t = trie_walk(p->rctx->t, " ", 1);
-		if (t == NULL) {
-			break;
+			return 0;
 		}
 
-		p->rctx->t = t;
+		/* TODO: unneccessary when argv changes to contain the entire command */
+		/* TODO: then also break on a string */
+		if (p->rctx->t->command != NULL) {
+			break;
+		}
 	}
 
 	{
@@ -108,6 +110,8 @@ parsecommand(struct cl_peer *p, const char *src, char *dst)
 		}
 
 		if (p->rctx->t->command == NULL) {
+			cl_printf(p, "command not found\n");
+
 			return 0;
 		}
 
@@ -227,6 +231,8 @@ flags(enum readstate state)
 	case STATE_COMMAND: return EDIT_ECHO | EDIT_TRIE | EDIT_HIST;
 	case STATE_FIELD:   return EDIT_ECHO; /* TODO: depends on the field */
 	}
+
+	return 0;
 }
 
 int
@@ -320,6 +326,8 @@ getc_main(struct cl_peer *p, const struct cl_event *event)
 		cl_printf(p, "\n");
 
 		p->rctx->values->value = edit_release(p->ectx);
+
+		/* TODO: call validate callback here */
 
 		p->rctx->fields &= p->rctx->fields - 1;
 
