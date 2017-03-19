@@ -1,5 +1,3 @@
-# $Id$
-
 .if defined(_BASEDIR_RELATIVE)
 BASE_DIR!= cd ${_BASEDIR_RELATIVE} && pwd
 .else

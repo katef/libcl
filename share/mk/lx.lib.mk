@@ -1,5 +1,3 @@
-# $Id$
-
 .if !defined(LIB)
 .BEGIN::
 	@${ECHO} '$${LIB} must be set' >&2

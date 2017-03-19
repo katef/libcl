@@ -1,4 +1,3 @@
-# $Id$
 # generic Makefile.inc
 
 .if defined(_BASEDIR_RELATIVE)

@@ -1,5 +1,3 @@
-/* $Id$ */
-
 #ifndef LIBCL_TREE_H
 #define LIBCL_TREE_H
 

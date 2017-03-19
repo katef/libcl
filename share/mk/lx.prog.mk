@@ -1,5 +1,3 @@
-# $Id$
-
 .if !defined(OBJS)
 .BEGIN::
 	@${ECHO} '$${OBJS} must be set' >&2

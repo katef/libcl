@@ -1,5 +1,3 @@
-# $Id$
-
 # TODO: this makefile is portable, and gets installed to share/examples as "Makefile"
 
 router: router.o

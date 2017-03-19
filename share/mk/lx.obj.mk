@@ -1,5 +1,3 @@
-# $Id$
-
 .if !defined(SRCS)
 .BEGIN::
 	@${ECHO} '$${SRCS} must be set' >&2

@@ -1,5 +1,3 @@
-# $Id$
-
 .if !defined(SID_SID)
 .BEGIN::
 	@${ECHO} '$${SID_SID} must be set' 2>&1

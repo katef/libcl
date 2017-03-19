@@ -1,5 +1,3 @@
-# $Id$
-
 CC?= gcc
 
 .if ${CC:Mgcc}

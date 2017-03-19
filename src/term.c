@@ -1,5 +1,3 @@
-/* $Id$ */
-
 #include <cl/tree.h>
 
 #include <unibilium.h>

@@ -1,5 +1,3 @@
-/* $Id$ */
-
 #ifndef LIBCL_INTERNAL_H
 #define LIBCL_INTERNAL_H
 

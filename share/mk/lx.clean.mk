@@ -1,5 +1,3 @@
-# $Id$
-
 CLEANDIRS+= ${OBJ_SDIR}
 
 # TODO: if empty directory, also rmdir OBJ_SDIR (since we created it)

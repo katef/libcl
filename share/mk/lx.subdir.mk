@@ -1,5 +1,3 @@
-# $Id$
-
 .if !defined(SUBDIR)
 .BEGIN::
 	@${ECHO} '$${SUBDIR} must be set' >&2

@@ -1,5 +1,3 @@
-# $Id$
-
 # default target
 all::
 
