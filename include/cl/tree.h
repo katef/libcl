@@ -1,3 +1,9 @@
+/*
+ * Copyright 2012-2017 Katherine Flavel
+ *
+ * See LICENCE for the full copyright terms.
+ */
+
 #ifndef LIBCL_TREE_H
 #define LIBCL_TREE_H
 

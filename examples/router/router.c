@@ -1,3 +1,9 @@
+/*
+ * Copyright 2012-2017 Katherine Flavel
+ *
+ * See LICENCE for the full copyright terms.
+ */
+
 #ifndef _XOPEN_SOURCE
 # define _XOPEN_SOURCE 600
 #endif
