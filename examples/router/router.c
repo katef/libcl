@@ -31,7 +31,7 @@
 #include <limits.h>
 #include <errno.h>
 
-#if defined(__GNU_LIBRARY__) || defined(__GLIBC__) || defined(__sun)
+#if defined(__GNU_LIBRARY__) || defined(__GLIBC__)
 # undef  HAVE_SALEN
 #elif defined(__sun)
 # undef  HAVE_SALEN
