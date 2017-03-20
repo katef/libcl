@@ -41,7 +41,11 @@
 
 /* XXX: va_copy is C99; this workaround is not portable */
 #ifndef va_copy
-# define va_copy(dst, src) ((dst) = (src))
+# if defined(__GNUC__) || defined(__clang__)
+#  define va_copy(dst, src) __builtin_va_copy(dst, src)
+# else
+#  define va_copy(dst, src) ((dst) = (src))
+# endif
 #endif
 
 #define MOTD "This is an example command server for libcl. Type help for help."
