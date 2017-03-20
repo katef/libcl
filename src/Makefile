@@ -1,26 +1,20 @@
-.include "Makefile.inc"
+.include "../share/mk/top.mk"
 
+SRC += src/cl.c
+SRC += src/trie.c
+SRC += src/field.c
+SRC += src/term.c
+SRC += src/read.c
+SRC += src/edit.c
+SRC += src/lexer.c
 
-CFLAGS+= -I ${BASE_DIR}/include
+CFLAGS_src/term.c += ${CFLAGS_UNIBILIUM}
+DFLAGS_src/term.c += ${CFLAGS_UNIBILIUM}
 
-SRCS+= cl.c
-SRCS+= trie.c
-SRCS+= field.c
-SRCS+= term.c
-SRCS+= read.c
-SRCS+= edit.c
-SRCS+= lexer.c
+LIB += libcl
 
-SRCS+= io/start.c
-SRCS+= io/end.c
-SRCS+= io/ecma48.c
-SRCS+= io/telnet.c
-
-.include <lx.obj.mk>
-
-
-LIB= libcl
-LIB_NS= cl_
-
-.include <lx.lib.mk>
+.for src in ${SRC:Msrc/*.c}
+${BUILD}/lib/libcl.o:    ${BUILD}/${src:R}.o
+${BUILD}/lib/libcl.opic: ${BUILD}/${src:R}.opic
+.endfor
 

@@ -1,8 +1,2 @@
-.include "Makefile.inc"
-
-
-SUBDIR+= advent
-SUBDIR+= router
-
-.include <lx.subdir.mk>
+.include "../share/mk/top.mk"
 

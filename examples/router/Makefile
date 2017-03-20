@@ -1,22 +1,19 @@
-.include "Makefile.inc"
+.include "../../share/mk/top.mk"
 
+SRC += examples/router/router.c
 
-CFLAGS+= -I ${BASE_DIR}/include
+PROG += router
 
-SRCS+= router.c
+LFLAGS_router += ${BUILD}/lib/libcl.a
+LFLAGS_router += ${LIBS_UNIBILIUM} # XXX: should be in -lcl
+LFLAGS_router += ${LIBS_LIBTELNET} # XXX: should be in -lcl
+LFLAGS_router += ${LIBS_TERMKEY}   # XXX: should be in -lcl
 
-.include <lx.obj.mk>
+.for lib in ${LIB:Mlibcl}
+${BUILD}/bin/router: ${BUILD}/lib/${lib:R}.a
+.endfor
 
-
-PROG= ${.CURDIR:T}
-
-# TODO: this needs doing properly, including dependencies for libraries being rebuilt
-LDFLAGS+= -L${OBJ_DIR}/src
-
-LIBS+= -lcl
-LIBS+= -ltermkey
-LIBS+= -ltelnet
-LIBS+= -lunibilium
-
-.include <lx.prog.mk>
+.for src in ${SRC:Mexamples/router/*.c}
+${BUILD}/bin/router: ${BUILD}/${src:R}.o
+.endfor
 

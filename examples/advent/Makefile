@@ -1,22 +1,19 @@
-.include "Makefile.inc"
+.include "../../share/mk/top.mk"
 
+SRC += examples/advent/advent.c
 
-CFLAGS+= -I ${BASE_DIR}/include
+PROG += advent
 
-SRCS+= advent.c
+LFLAGS_advent += ${BUILD}/lib/libcl.a
+LFLAGS_advent += ${LIBS_UNIBILIUM} # XXX: should be in -lcl
+LFLAGS_advent += ${LIBS_LIBTELNET} # XXX: should be in -lcl
+LFLAGS_advent += ${LIBS_TERMKEY}   # XXX: should be in -lcl
 
-.include <lx.obj.mk>
+.for lib in ${LIB:Mlibcl}
+${BUILD}/bin/advent: ${BUILD}/lib/${lib:R}.a
+.endfor
 
-
-PROG= ${.CURDIR:T}
-
-# TODO: this needs doing properly, including dependencies for libraries being rebuilt
-LDFLAGS+= -L${OBJ_DIR}/src
-
-LIBS+= -lcl
-LIBS+= -ltermkey
-LIBS+= -ltelnet	# XXX: don't like this here
-LIBS+= -lunibilium
-
-.include <lx.prog.mk>
+.for src in ${SRC:Mexamples/advent/*.c}
+${BUILD}/bin/advent: ${BUILD}/${src:R}.o
+.endfor
 
