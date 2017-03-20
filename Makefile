@@ -14,6 +14,11 @@ BUILD   ?= build
 PREFIX  ?= /usr/local
 PKGCONF ?= pkgconf # or pkg-config
 
+all::
+	${PKGCONF} --exists unibilium
+	${PKGCONF} --exists termkey
+	${PKGCONF} --exists libtelnet
+
 CFLAGS_UNIBILIUM != ${PKGCONF} unibilium --cflags
 LIBS_UNIBILIUM   != ${PKGCONF} unibilium --libs
 CFLAGS_TERMKEY   != ${PKGCONF} termkey   --cflags
