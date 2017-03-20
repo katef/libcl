@@ -13,14 +13,6 @@
 # define _DARWIN_C_SOURCE
 #endif
 
-#if defined(__GNU_LIBRARY__) || defined(__GLIBC__) || defined(__sun)
-# undef  HAVE_SALEN
-#elif defined(__sun)
-# undef  HAVE_SALEN
-#else
-# define HAVE_SALEN
-#endif
-
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/select.h>
@@ -38,6 +30,14 @@
 #include <stdint.h>	/* XXX: C99, for SIZE_MAX */
 #include <limits.h>
 #include <errno.h>
+
+#if defined(__GNU_LIBRARY__) || defined(__GLIBC__) || defined(__sun)
+# undef  HAVE_SALEN
+#elif defined(__sun)
+# undef  HAVE_SALEN
+#else
+# define HAVE_SALEN
+#endif
 
 /* XXX: va_copy is C99; this workaround is not portable */
 #ifndef va_copy
