@@ -9,16 +9,17 @@ install:: all
 clean::
 
 # things to override
-CC     ?= gcc
-BUILD  ?= build
-PREFIX ?= /usr/local
+CC      ?= gcc
+BUILD   ?= build
+PREFIX  ?= /usr/local
+PKGCONF ?= pkgconf # or pkg-config
 
-CFLAGS_UNIBILIUM != pkg-config unibilium --cflags
-LIBS_UNIBILIUM   != pkg-config unibilium --libs
-CFLAGS_TERMKEY   != pkg-config termkey   --cflags
-LIBS_TERMKEY     != pkg-config termkey   --libs
-CFLAGS_LIBTELNET != pkg-config libtelnet --cflags
-LIBS_LIBTELNET   != pkg-config libtelnet --libs
+CFLAGS_UNIBILIUM != ${PKGCONF} unibilium --cflags
+LIBS_UNIBILIUM   != ${PKGCONF} unibilium --libs
+CFLAGS_TERMKEY   != ${PKGCONF} termkey   --cflags
+LIBS_TERMKEY     != ${PKGCONF} termkey   --libs
+CFLAGS_LIBTELNET != ${PKGCONF} libtelnet --cflags
+LIBS_LIBTELNET   != ${PKGCONF} libtelnet --libs
 
 # layout
 SUBDIR += examples
