@@ -8,8 +8,8 @@ SRC += src/read.c
 SRC += src/edit.c
 SRC += src/lexer.c
 
-CFLAGS_src/term.c += ${CFLAGS_UNIBILIUM}
-DFLAGS_src/term.c += ${CFLAGS_UNIBILIUM}
+CFLAGS_src/term.c += ${CFLAGS_unibilium}
+DFLAGS_src/term.c += ${CFLAGS_unibilium}
 
 LIB += libcl
 

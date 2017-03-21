@@ -5,9 +5,9 @@ SRC += examples/advent/advent.c
 PROG += advent
 
 LFLAGS_advent += ${BUILD}/lib/libcl.a
-LFLAGS_advent += ${LIBS_UNIBILIUM} # XXX: should be in -lcl
-LFLAGS_advent += ${LIBS_LIBTELNET} # XXX: should be in -lcl
-LFLAGS_advent += ${LIBS_TERMKEY}   # XXX: should be in -lcl
+LFLAGS_advent += ${LIBS_unibilium} # XXX: should be in -lcl
+LFLAGS_advent += ${LIBS_libtelnet} # XXX: should be in -lcl
+LFLAGS_advent += ${LIBS_termkey}   # XXX: should be in -lcl
 
 .for lib in ${LIB:Mlibcl}
 ${BUILD}/bin/advent: ${BUILD}/lib/${lib:R}.a

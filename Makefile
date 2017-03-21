@@ -12,19 +12,10 @@ clean::
 CC      ?= gcc
 BUILD   ?= build
 PREFIX  ?= /usr/local
-PKGCONF ?= pkgconf # or pkg-config
 
-all::
-	${PKGCONF} --exists unibilium
-	${PKGCONF} --exists termkey
-	${PKGCONF} --exists libtelnet
-
-CFLAGS_UNIBILIUM != ${PKGCONF} unibilium --cflags
-LIBS_UNIBILIUM   != ${PKGCONF} unibilium --libs
-CFLAGS_TERMKEY   != ${PKGCONF} termkey   --cflags
-LIBS_TERMKEY     != ${PKGCONF} termkey   --libs
-CFLAGS_LIBTELNET != ${PKGCONF} libtelnet --cflags
-LIBS_LIBTELNET   != ${PKGCONF} libtelnet --libs
+PKG += unibilium
+PKG += termkey
+PKG += libtelnet
 
 # layout
 SUBDIR += examples
@@ -38,6 +29,7 @@ INCDIR += include
 DIR += ${BUILD}/lib
 
 .include <subdir.mk>
+.include <pkgconf.mk>
 .include <obj.mk>
 .include <dep.mk>
 .include <ar.mk>

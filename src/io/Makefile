@@ -6,11 +6,11 @@ SRC += src/io/end.c
 SRC += src/io/ecma48.c
 SRC += src/io/telnet.c
 
-CFLAGS_src/io/ecma48.c += ${CFLAGS_TERMKEY}
-DFLAGS_src/io/ecma48.c += ${CFLAGS_TERMKEY}
+CFLAGS_src/io/ecma48.c += ${CFLAGS_termkey}
+DFLAGS_src/io/ecma48.c += ${CFLAGS_termkey}
 
-CFLAGS_src/io/telnet.c += ${CFLAGS_LIBTELNET}
-DFLAGS_src/io/telnet.c += ${CFLAGS_LIBTELNET}
+CFLAGS_src/io/telnet.c += ${CFLAGS_libtelnet}
+DFLAGS_src/io/telnet.c += ${CFLAGS_libtelnet}
 
 .for src in ${SRC:Msrc/io/*.c}
 ${BUILD}/lib/libcl.o:    ${BUILD}/${src:R}.o
