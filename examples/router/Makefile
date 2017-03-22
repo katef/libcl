@@ -4,10 +4,10 @@ SRC += examples/router/router.c
 
 PROG += router
 
-LFLAGS_router += ${BUILD}/lib/libcl.a
-LFLAGS_router += ${LIBS_unibilium} # XXX: should be in -lcl
-LFLAGS_router += ${LIBS_libtelnet} # XXX: should be in -lcl
-LFLAGS_router += ${LIBS_termkey}   # XXX: should be in -lcl
+LFLAGS.router += ${BUILD}/lib/libcl.a
+LFLAGS.router += ${LIBS.unibilium} # XXX: should be in -lcl
+LFLAGS.router += ${LIBS.libtelnet} # XXX: should be in -lcl
+LFLAGS.router += ${LIBS.termkey}   # XXX: should be in -lcl
 
 .for lib in ${LIB:Mlibcl}
 ${BUILD}/bin/router: ${BUILD}/lib/${lib:R}.a
