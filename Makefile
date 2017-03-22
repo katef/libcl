@@ -23,6 +23,7 @@ SUBDIR += examples/advent
 SUBDIR += examples/router
 SUBDIR += src
 SUBDIR += src/io
+SUBDIR += pc
 
 INCDIR += include
 
@@ -30,6 +31,7 @@ DIR += ${BUILD}/lib
 
 .include <subdir.mk>
 .include <pkgconf.mk>
+.include <pc.mk>
 .include <obj.mk>
 .include <dep.mk>
 .include <ar.mk>

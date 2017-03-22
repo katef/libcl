@@ -1,0 +1,13 @@
+prefix=@prefix@
+libdir=${prefix}/lib
+includedir=${prefix}/include
+
+Name: libcl
+Description: Command line editor
+Version: 0.1
+Requires:
+Requires.private: unibilium termkey libtelnet
+Libs: -L${libdir} -lcl
+Libs.private: -lunibilium -ltermkey -ltelnet
+Cflags: -I${includedir}
+
