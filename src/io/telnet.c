@@ -236,8 +236,6 @@ static ssize_t
 cltelnet_read(struct cl_peer *p, struct cl_chctx chctx[],
 	const void *data, size_t len)
 {
-	struct cl_chctx *prev;
-
 	assert(p != NULL);
 	assert(chctx != NULL);
 	assert(chctx->ioctx != NULL);
@@ -246,8 +244,6 @@ cltelnet_read(struct cl_peer *p, struct cl_chctx chctx[],
 	assert(chctx->ioapi != NULL);
 	assert(chctx->ioapi->read == cltelnet_read);
 	assert(data != NULL);
-
-	prev = chctx - 1;
 
 	telnet_recv(chctx->ioctx->tt, data, len);
 

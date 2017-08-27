@@ -30,6 +30,7 @@ cmd_look(struct cl_peer *peer, const char *cmd, int mode, int argc, const char *
 
 	(void) cmd;
 	(void) argv;
+	(void) mode;
 
 	if (argc != 0) {
 		cl_printf(peer, "invalid cardinality");
@@ -49,6 +50,7 @@ cmd_go(struct cl_peer *peer, const char *cmd, int mode, int argc, const char *ar
 
 	(void) cmd;
 	(void) argv;
+	(void) mode;
 
 	if (argc != 0) {
 		cl_printf(peer, "invalid cardinality");
@@ -68,6 +70,7 @@ cmd_quit(struct cl_peer *peer, const char *cmd, int mode, int argc, const char *
 
 	(void) cmd;
 	(void) argv;
+	(void) mode;
 
 	if (argc != 0) {
 		cl_printf(peer, "invalid cardinality");
@@ -111,6 +114,8 @@ printprompt(struct cl_peer *peer, int mode)
 {
 	assert(peer != NULL);
 
+	(void) mode;
+
 	/* TODO: various (non-bitmap) modes here: alive, hungry, raining, etc */
 
 	return cl_printf(peer, "> ");
@@ -120,6 +125,9 @@ static int
 visible(struct cl_peer *p, int mode, int modes)
 {
 	assert(p != NULL);
+
+	(void) mode;
+	(void) modes;
 
 	return 1;
 }
@@ -196,6 +204,8 @@ main(int argc, char **argv)
 		fprintf(stderr, "usage: <no arguments>\n");
 		return 1;
 	}
+
+	(void) argv;
 
 	peer = cl_accept(tree, CL_ECMA48);
 	if (peer == NULL) {

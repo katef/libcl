@@ -162,6 +162,8 @@ trie_run(struct cl_peer *p, const struct trie *trie, int mode, char c)
 	assert(p != NULL);
 	assert(trie != NULL);
 
+	(void) c;
+
 	trie = trie_cycle(p, trie, mode, ' ', NULL);
 	if (trie == NULL) {
 		return NULL;

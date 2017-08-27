@@ -102,6 +102,7 @@ cl_create(size_t command_count, const struct cl_command commands[],
 void
 cl_destroy(struct cl_tree *t)
 {
+	(void) t;
 }
 
 struct cl_peer *
@@ -313,6 +314,7 @@ cl_set_mode(struct cl_peer *p, int mode)
 void
 cl_again(struct cl_peer *p)
 {
+	(void) p;
 }
 
 void
