@@ -4,6 +4,8 @@
  * See LICENCE for the full copyright terms.
  */
 
+#define _POSIX_SOURCE
+
 #include <sys/types.h>
 
 #include <cl/tree.h>
