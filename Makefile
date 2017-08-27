@@ -18,11 +18,11 @@ PKG += termkey
 PKG += libtelnet
 
 # layout
-SUBDIR += examples
 SUBDIR += examples/advent
 SUBDIR += examples/router
-SUBDIR += src
+SUBDIR += examples
 SUBDIR += src/io
+SUBDIR += src
 SUBDIR += pc
 
 INCDIR += include
