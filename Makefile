@@ -27,8 +27,6 @@ SUBDIR += pc
 
 INCDIR += include
 
-DIR += ${BUILD}/lib
-
 .include <subdir.mk>
 .include <pkgconf.mk>
 .include <pc.mk>
