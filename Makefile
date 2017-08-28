@@ -6,6 +6,7 @@ dep::
 gen::
 test::
 install:: all
+uninstall::
 clean::
 
 # things to override
