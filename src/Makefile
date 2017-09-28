@@ -11,7 +11,8 @@ SRC += src/lexer.c
 CFLAGS.src/term.c += ${CFLAGS.unibilium}
 DFLAGS.src/term.c += ${CFLAGS.unibilium}
 
-LIB += libcl
+LIB        += libcl
+SYMS.libcl += src/libcl.syms
 
 .for src in ${SRC:Msrc/*.c}
 ${BUILD}/lib/libcl.o:    ${BUILD}/${src:R}.o
