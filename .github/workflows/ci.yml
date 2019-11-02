@@ -1,0 +1,17 @@
+name: CI
+
+on: [push]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v1
+    - name: dependencies
+      run: apt-get install bmake
+    - name: make
+      run: bmake -r CC=gcc
+    - name: test
+      run: make test
