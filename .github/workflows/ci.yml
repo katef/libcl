@@ -9,6 +9,8 @@ jobs:
     
     steps:
     - uses: actions/checkout@v1
+      with:
+        submodules: recursive
 
     - name: dependencies
       run: sudo apt-get install bmake libtelnet-dev libunibilium-dev libtermkey-dev
