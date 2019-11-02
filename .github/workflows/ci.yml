@@ -19,4 +19,7 @@ jobs:
       run: bmake -r PKGCONF=pkg-config CC=gcc
 
     - name: test
-      run: make test
+      run: bmake -r test
+
+    - name: install
+      run: bmake -r PREFIX=/tmp/p install
