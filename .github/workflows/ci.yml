@@ -23,10 +23,10 @@ jobs:
       run: sudo apt-get install pmake bmake libtelnet-dev libunibilium-dev libtermkey-dev
 
     - name: make
-      run: ${{ matrix.make }} -r PKGCONF=pkg-config CC=${{ matrix.cc }}
+      run: ${{ matrix.make }} -r -j 2 PKGCONF=pkg-config CC=${{ matrix.cc }}
 
     - name: test
-      run: ${{ matrix.make }} -r PKGCONF=pkg-config test
+      run: ${{ matrix.make }} -r -j 2 PKGCONF=pkg-config test
 
     - name: install
-      run: ${{ matrix.make }} -r PKGCONF=pkg-config PREFIX=/tmp/p install
+      run: ${{ matrix.make }} -r -j 2 PKGCONF=pkg-config PREFIX=/tmp/p install
