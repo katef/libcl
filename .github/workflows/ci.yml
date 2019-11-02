@@ -16,7 +16,7 @@ jobs:
       run: sudo apt-get install bmake libtelnet-dev libunibilium-dev libtermkey-dev
 
     - name: make
-      run: bmake -r CC=gcc
+      run: bmake -r PKGCONF=pkg-config CC=gcc
 
     - name: test
       run: make test
