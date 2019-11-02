@@ -11,6 +11,8 @@ jobs:
       fail-fast: false
       matrix:
         os: [ ubuntu-latest, ubuntu-16.04, ubuntu-18.04 ]
+        cc: [ clang, gcc ]
+        make: [ bmake, pmake ]
     
     steps:
     - uses: actions/checkout@v1
@@ -18,13 +20,13 @@ jobs:
         submodules: recursive
 
     - name: dependencies
-      run: sudo apt-get install bmake libtelnet-dev libunibilium-dev libtermkey-dev
+      run: sudo apt-get install pmake bmake libtelnet-dev libunibilium-dev libtermkey-dev
 
     - name: make
-      run: bmake -r PKGCONF=pkg-config CC=gcc
+      run: ${{ matrix.make }} -r PKGCONF=pkg-config CC=${{ matrix.cc }}
 
     - name: test
-      run: bmake -r PKGCONF=pkg-config test
+      run: ${{ matrix.make }} -r PKGCONF=pkg-config test
 
     - name: install
-      run: bmake -r PKGCONF=pkg-config PREFIX=/tmp/p install
+      run: ${{ matrix.make }} -r PKGCONF=pkg-config PREFIX=/tmp/p install
