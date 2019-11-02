@@ -9,9 +9,12 @@ jobs:
     
     steps:
     - uses: actions/checkout@v1
+
     - name: dependencies
-      run: apt-get install bmake
+      run: sudo apt-get install bmake libtelnet-dev libunibilium-dev libtermkey-dev
+
     - name: make
       run: bmake -r CC=gcc
+
     - name: test
       run: make test
